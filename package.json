@@ -7,9 +7,14 @@
 	"type": "commonjs",
 	"main": "index.js",
 	"scripts": {
+		"build": "tsc",
+		"compile": "tsc",
+		"develop": "tsc -w",
 		"test": "echo \"Error: no test specified\" && exit 1"
 	},
 	"devDependencies": {
+		"@types/node": "^25.0.3",
+		"ts-node": "^10.9.2",
 		"typescript": "^5.9.3"
 	}
 }
