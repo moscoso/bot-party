@@ -2,8 +2,9 @@ import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { LOCATIONS } from "./data";
 import { Agent } from "./agent";
+import { AIController, HumanController, PlayerController } from "./controllers";
 import { GameConfig, Player, PlayerId, PlayerSecret, Turn } from "./types";
-import { buildAskerInstruction, parseField, buildAnswerInstruction, buildSpyGuessPrompt, buildVotePrompt, buildPlayerSystemPrompt, secretToBrief } from "./prompts";
+import { parseField, buildPlayerSystemPrompt, secretToBrief } from "./prompts";
 
 /** ---------- small utilities ---------- */
 
@@ -37,72 +38,6 @@ function resolveOtherPlayer(players: Player[], targetName: string, excludeId: Pl
     return safePickRandom(notSelf, players.find(p => p.id !== excludeId) ?? players[0]);
 }
 
-
-/** ---------- PlayerControllers ---------- */
-
-type AskResult = { targetName: string; question: string };
-
-interface PlayerController {
-    ask(players: Player[], self: Player): Promise<AskResult>;
-    answer(askerName: string, question: string): Promise<string>;
-    guessLocation(turns: Turn[], self: Player): Promise<string | null>;
-    vote(players: Player[], turns: Turn[], self: Player): Promise<string>;
-}
-
-class HumanController implements PlayerController {
-    constructor(private rl: ReturnType<typeof readline.createInterface>) {}
-
-    async ask(players: Player[], self: Player): Promise<AskResult> {
-        const others = players.filter(p => p.id !== self.id).map(p => p.name);
-        console.log(`\nIt is your turn to ask.`);
-        const targetName = await this.rl.question(`Choose a target (${others.join(", ")}): `);
-        const question = await this.rl.question(`Your question: `);
-        return { targetName, question };
-    }
-
-    async answer(askerName: string, question: string): Promise<string> {
-        console.log(`\n❓ ${askerName} asked you: ${question}`);
-        return await this.rl.question(`Your answer: `);
-    }
-
-    async guessLocation(_turns: Turn[], self: Player): Promise<string | null> {
-        console.log("\n🚨 You've been accused! One last chance to guess the location.");
-        const guess = await this.rl.question("Your final guess: ");
-        return `GUESS: ${guess}\nREASON: Human intuition.`;
-    }
-
-    async vote(players: Player[], _turns: Turn[], self: Player): Promise<string> {
-        const candidates = players.map(p => p.name).filter(n => n !== self.name);
-        const vote = await this.rl.question(`\n🗳️ Vote for the SPY (${candidates.join(", ")}): `);
-        return `VOTE: ${vote}`;
-    }
-}
-
-class AgentController implements PlayerController {
-    constructor(private agent: Agent) {}
-
-    async ask(players: Player[], self: Player): Promise<AskResult> {
-        const askText = await this.agent.say(buildAskerInstruction(players, self));
-        return {
-            targetName: parseField("TARGET", askText),
-            question: parseField("QUESTION", askText)
-        };
-    }
-
-    async answer(askerName: string, question: string): Promise<string> {
-        return await this.agent.say(buildAnswerInstruction(askerName, question));
-    }
-
-    async guessLocation(turns: Turn[], self: Player): Promise<string | null> {
-        if (self.secret.kind !== "SPY") return null;
-        return await this.agent.say(buildSpyGuessPrompt(turns));
-    }
-
-    async vote(players: Player[], turns: Turn[], self: Player): Promise<string> {
-        return await this.agent.say(buildVotePrompt(players, turns, self.name));
-    }
-}
-
 /** ---------- Game Engine ---------- */
 
 export class SpyfallGame {
@@ -134,7 +69,7 @@ export class SpyfallGame {
             for (const p of players) {
                 controllers.set(p.id, p.isHuman 
                     ? new HumanController(this.rl) 
-                    : new AgentController(new Agent(p.name, buildPlayerSystemPrompt(p.name, p.secret)))
+                    : new AIController(new Agent(p.name, buildPlayerSystemPrompt(p.name, p.secret)))
                 );
             }
 

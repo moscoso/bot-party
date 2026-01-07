@@ -1,0 +1,29 @@
+import { Agent } from "../agent";
+import { buildAskerInstruction, parseField, buildAnswerInstruction, buildSpyGuessPrompt, buildVotePrompt } from "../prompts";
+import { Player, Turn } from "../types";
+import { PlayerController, AskResult } from "./player.controller";
+
+export class AIController implements PlayerController {
+    constructor(private agent: Agent) {}
+
+    async ask(players: Player[], self: Player): Promise<AskResult> {
+        const askText = await this.agent.say(buildAskerInstruction(players, self));
+        return {
+            targetName: parseField("TARGET", askText),
+            question: parseField("QUESTION", askText) || "What do you think of the atmosphere here?"
+        };
+    }
+
+    async answer(askerName: string, question: string): Promise<string> {
+        return await this.agent.say(buildAnswerInstruction(askerName, question));
+    }
+
+    async guessLocation(turns: Turn[], self: Player): Promise<string | null> {
+        if (self.secret.kind !== "SPY") return null;
+        return await this.agent.say(buildSpyGuessPrompt(turns));
+    }
+
+    async vote(players: Player[], turns: Turn[], self: Player): Promise<string> {
+        return await this.agent.say(buildVotePrompt(players, turns, self.name));
+    }
+}
