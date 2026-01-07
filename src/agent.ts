@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const MODEL = process.env.OPENAI_MODEL || "gpt-5.2";
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
@@ -19,7 +19,8 @@ export class Agent {
 
         const resp = await openai.chat.completions.create({
             model: MODEL,
-            messages: this.memory
+            messages: this.memory,
+            reasoning_effort: "medium",
         });
 
         const text = resp.choices[0]?.message?.content?.trim() || "(no response)";
