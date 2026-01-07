@@ -1,8 +1,9 @@
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { allLocationsList, LOCATIONS } from "./data";
+import { LOCATIONS } from "./data";
 import { Agent } from "./agent";
 import { GameConfig, Player, PlayerId, PlayerSecret, Turn } from "./types";
+import { buildAskerInstruction, parseField, buildAnswerInstruction, buildSpyGuessPrompt, buildVotePrompt, buildPlayerSystemPrompt, secretToBrief } from "./prompts";
 
 /** ---------- small utilities ---------- */
 
@@ -36,84 +37,6 @@ function resolveOtherPlayer(players: Player[], targetName: string, excludeId: Pl
     return safePickRandom(notSelf, players.find(p => p.id !== excludeId) ?? players[0]);
 }
 
-/** ---------- prompt helpers ---------- */
-
-function secretToBrief(secret: PlayerSecret): string {
-    if (secret.kind === "SPY") return "🕵️ YOU ARE THE SPY. You do NOT know the location. Blend in!";
-    return `📍 Location: ${secret.location}\n👤 Your role: ${secret.role}`;
-}
-
-function buildPlayerSystemPrompt(name: string, secret: PlayerSecret): string {
-    const common = `
-        You are playing Spyfall in a group chat.
-
-        All possible locations in this game are:
-        ${allLocationsList()}
-
-        Rules:
-        - If you are NOT the spy: you know the location. Answer questions naturally without being too obvious.
-        - If you ARE the spy: you do not know the location. Infer it from others' answers.
-        - Never explicitly reveal the location name.
-        - Keep answers natural (1–3 sentences). Stay in-character.
-        - Prefer vague, indirect phrasing.
-        `;
-
-    const personal = `\nYour name is ${name}.\n${secretToBrief(secret)}\n`;
-    return common + personal;
-}
-
-function buildAskerInstruction(players: Player[], self: Player): string {
-    const names = players.map(p => p.name).filter(n => n !== self.name).join(", ");
-    return `
-        Players you can ask: ${names}
-        Your job: Ask ONE clever question to ONE player to gather info.
-        Return exactly:
-        TARGET: <player name>
-        QUESTION: <your question>
-    `;
-}
-
-function buildAnswerInstruction(askerName: string, question: string): string {
-    return `${askerName} asked you: "${question}"\nAnswer appropriately for Spyfall (1-3 sentences).`;
-}
-
-function buildSpyGuessPrompt(turns: Turn[]): string {
-    const recap = turns
-        .map(t => `${t.askerId} -> ${t.targetId}\nQ: ${t.question}\nA: ${t.answer}`)
-        .join("\n\n");
-    return `
-        You have been caught! This is your final chance to win. 
-        Based on the transcript, guess the location. Be dramatic.
-        Reply exactly with:
-        GUESS: <location name>
-        REASON: <one sentence explaining what clue gave it away>
-
-    Transcript:
-    ${recap}`;
-}
-
-function buildVotePrompt(players: Player[], turns: Turn[], selfName: string): string {
-    const recap = turns
-        .map(t => `${t.askerId} asked ${t.targetId}: ${t.question}\nAnswer: ${t.answer}`)
-        .join("\n\n");
-
-    const names = players.map(p => p.name).filter(n => n !== selfName).join(", ");
-    return `
-        Review the transcript. Who is the SPY? 
-        Candidates: ${names}
-        Reply exactly with:
-        VOTE: <player name>
-        WHY: <one sentence reasoning>
-
-    Transcript:
-    ${recap}`;
-}
-
-function parseField(text: string, field: string): string {
-    const regex = new RegExp(`${field}:\\s*(.*)`, "i");
-    const match = text.match(regex);
-    return match ? match[1].trim() : "";
-}
 
 /** ---------- PlayerControllers ---------- */
 
@@ -161,8 +84,8 @@ class AgentController implements PlayerController {
     async ask(players: Player[], self: Player): Promise<AskResult> {
         const askText = await this.agent.say(buildAskerInstruction(players, self));
         return {
-            targetName: parseField(askText, "TARGET"),
-            question: parseField(askText, "QUESTION") || "What do you think of the atmosphere here?"
+            targetName: parseField("TARGET", askText),
+            question: parseField("QUESTION", askText)
         };
     }
 
@@ -239,7 +162,7 @@ export class SpyfallGame {
             const votes = new Map<string, number>();
             for (const p of players) {
                 const rawVote = await controllers.get(p.id)!.vote(players, turns, p);
-                const voteName = parseField(rawVote, "VOTE");
+                const voteName = parseField("VOTE", rawVote);
                 const validCandidate = players.find(x => normalizeName(x.name) === normalizeName(voteName) && x.id !== p.id);
                 const finalVote = validCandidate?.name || safePickRandom(players.filter(x => x.id !== p.id), players[0]).name;
                 
@@ -260,14 +183,14 @@ export class SpyfallGame {
             let spyGuessedRight = false;
             if (accusedName === spy.name || isTie) {
                 console.log(`\n${spy.name} attempts a final guess...`);
-                const guessRaw = await controllers.get(spy.id)!.guessLocation(turns, spy);
-                const guessLoc = parseField(guessRaw || "", "GUESS");
-                const reason = parseField(guessRaw || "", "REASON");
+                const guessRaw = await controllers.get(spy.id)!.guessLocation(turns, spy) ?? "";
+                const guess = parseField("GUESS", guessRaw);
+                const reason = parseField("REASON", guessRaw);
 
-                console.log(`${spy.name}: "I believe we are at the ${guessLoc.toUpperCase()}!"`);
+                console.log(`${spy.name}: "I believe we are at the ${guess.toUpperCase()}!"`);
                 if (reason) console.log(`Reason: "${reason}"`);
 
-                spyGuessedRight = normalizeName(guessLoc) === normalizeName(pack.location);
+                spyGuessedRight = normalizeName(guess) === normalizeName(pack.location);
             }
 
             // 5. FINAL SCORE
