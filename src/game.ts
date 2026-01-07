@@ -1,6 +1,6 @@
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { LOCATIONS } from "./data";
+import { allLocationsList, LOCATIONS } from "./data";
 import { Agent } from "./agent";
 import { AIController, HumanController, PlayerController } from "./controllers";
 import { GameConfig, Player, PlayerId, PlayerSecret, Turn } from "./types";
@@ -29,13 +29,37 @@ function normalizeName(s: string): string {
     return s.trim().toLowerCase();
 }
 
-/** Resolve a target by name, but never allow selecting self; always fall back to a valid alternative. */
-function resolveOtherPlayer(players: Player[], targetName: string, excludeId: PlayerId): Player {
-    const byName = players.find(p => normalizeName(p.name) === normalizeName(targetName));
-    if (byName && byName.id !== excludeId) return byName;
+/** * Resolve a target by name.
+ * Enforces: 
+ * 1. Target is not the asker (selfId)
+ * 2. Target is not the person who just asked (lastAskerId)
+ */
+function resolveOtherPlayer(
+    players: Player[], 
+    targetName: string, 
+    selfId: PlayerId, 
+    lastAskerId?: PlayerId
+): Player {
+    const normalized = normalizeName(targetName);
+    const candidate = players.find(p => normalizeName(p.name) === normalized);
 
-    const notSelf = players.filter(p => p.id !== excludeId);
-    return safePickRandom(notSelf, players.find(p => p.id !== excludeId) ?? players[0]);
+    // Logic: Illegal if target is self OR target is the person who just asked you
+    const isIllegal = (p: Player) => p.id === selfId || (lastAskerId && p.id === lastAskerId);
+
+    // If the chosen candidate is valid, use them
+    if (candidate && !isIllegal(candidate)) {
+        return candidate;
+    }
+
+    // Fallback: Filter all players to find those who are legal targets
+    const validOptions = players.filter(p => !isIllegal(p));
+    
+    // Safety check: if everyone is illegal (rare), just pick someone not self
+    if (validOptions.length === 0) {
+        return safePickRandom(players.filter(p => p.id !== selfId), players[0]);
+    }
+
+    return safePickRandom(validOptions, validOptions[0]);
 }
 
 /** ---------- Game Engine ---------- */
@@ -77,19 +101,36 @@ export class SpyfallGame {
             if (human) console.log(`\n=== YOUR IDENTITY ===\n${secretToBrief(human.secret)}\n=====================\n`);
 
             const turns: Turn[] = [];
-            const order = shuffle(players);
+            
+            // --- DYNAMIC TURN SETUP ---
+            let roundCount = 0;
+            let currentAsker = pickRandom(players);
+            let lastAsker: Player | null = null;
 
-            // 1. QUESTION ROUNDS
-            for (let r = 0; r < config.rounds; r++) {
-                const asker = order[r % order.length];
-                const askerCtl = controllers.get(asker.id)!;
-                const result = await askerCtl.ask(players, asker);
+            console.log(`🚀 Game started! ${currentAsker.name} will ask the first question.`);
+
+            // Using a while loop for dynamic flow
+            while (roundCount < config.rounds) {
+                roundCount++;
+                const askerCtl = controllers.get(currentAsker.id)!;
                 
-                const target = resolveOtherPlayer(players, result.targetName, asker.id);
-                const answer = await controllers.get(target.id)!.answer(asker.name, result.question);
+                // 1. ASKER CHOOSES TARGET & QUESTION
+                const result = await askerCtl.ask(players, currentAsker);
+                
+                // 2. RESOLVE TARGET (Enforce: not self, and not the person who just asked you)
+                const target = resolveOtherPlayer(players, result.targetName, currentAsker.id, lastAsker?.id);
+                const targetCtl = controllers.get(target.id)!;
 
-                turns.push({ askerId: asker.name, targetId: target.name, question: result.question, answer });
-                console.log(`\n[Turn ${r + 1}] ${asker.name} ➔ ${target.name}\nQ: ${result.question}\nA: ${answer}`);
+                // 3. TARGET ANSWERS
+                const answer = await targetCtl.answer(currentAsker.name, result.question);
+
+                // 4. RECORD & LOG
+                turns.push({ askerId: currentAsker.name, targetId: target.name, question: result.question, answer });
+                console.log(`\n[Round ${roundCount}] ${currentAsker.name} ➔ ${target.name}\nQ: ${result.question}\nA: ${answer}`);
+
+                // 5. UPDATE STATE (Respondent becomes the next Asker)
+                lastAsker = currentAsker;
+                currentAsker = target;
             }
 
             // 2. VOTING
@@ -98,8 +139,10 @@ export class SpyfallGame {
             for (const p of players) {
                 const rawVote = await controllers.get(p.id)!.vote(players, turns, p);
                 const voteName = parseField("VOTE", rawVote);
-                const validCandidate = players.find(x => normalizeName(x.name) === normalizeName(voteName) && x.id !== p.id);
-                const finalVote = validCandidate?.name || safePickRandom(players.filter(x => x.id !== p.id), players[0]).name;
+                
+                const candidates = players.filter(x => x.id !== p.id);
+                const validCandidate = candidates.find(x => normalizeName(x.name) === normalizeName(voteName));
+                const finalVote = validCandidate?.name || safePickRandom(candidates, players[0]).name;
                 
                 votes.set(finalVote, (votes.get(finalVote) || 0) + 1);
                 console.log(`${p.name} voted for: ${finalVote}`);
