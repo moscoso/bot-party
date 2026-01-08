@@ -35,9 +35,9 @@ function normalizeName(s: string): string {
  * 2. Target is not the person who just asked (lastAskerId)
  */
 function resolveOtherPlayer(
-    players: Player[], 
-    targetName: string, 
-    selfId: PlayerId, 
+    players: Player[],
+    targetName: string,
+    selfId: PlayerId,
     lastAskerId?: PlayerId
 ): Player {
     const normalized = normalizeName(targetName);
@@ -53,7 +53,7 @@ function resolveOtherPlayer(
 
     // Fallback: Filter all players to find those who are legal targets
     const validOptions = players.filter(p => !isIllegal(p));
-    
+
     // Safety check: if everyone is illegal (rare), just pick someone not self
     if (validOptions.length === 0) {
         return safePickRandom(players.filter(p => p.id !== selfId), players[0]);
@@ -82,17 +82,17 @@ export class SpyfallGame {
             for (let i = 0; i < config.numPlayers; i++) {
                 const isHuman = config.includeHuman && i === 0;
                 const name = isHuman ? "You" : `Agent${i}`;
-                const secret: PlayerSecret = (i === spyIndex) 
-                    ? { kind: "SPY" } 
+                const secret: PlayerSecret = (i === spyIndex)
+                    ? { kind: "SPY" }
                     : { kind: "CIVILIAN", location: pack.location, role: roles.pop() || "Visitor" };
-                
+
                 players.push({ id: name, name, isHuman, secret });
             }
 
             const controllers = new Map<PlayerId, PlayerController>();
             for (const p of players) {
-                controllers.set(p.id, p.isHuman 
-                    ? new HumanController(this.rl) 
+                controllers.set(p.id, p.isHuman
+                    ? new HumanController(this.rl)
                     : new AIController(new Agent(p.name, buildPlayerSystemPrompt(p.name, p.secret)))
                 );
             }
@@ -101,7 +101,7 @@ export class SpyfallGame {
             if (human) console.log(`\n=== YOUR IDENTITY ===\n${secretToBrief(human.secret)}\n=====================\n`);
 
             const turns: Turn[] = [];
-            
+
             // --- DYNAMIC TURN SETUP ---
             let roundCount = 0;
             let currentAsker = pickRandom(players);
@@ -113,22 +113,39 @@ export class SpyfallGame {
             while (roundCount < config.rounds) {
                 roundCount++;
                 const askerCtl = controllers.get(currentAsker.id)!;
-                
+
                 // 1. ASKER CHOOSES TARGET & QUESTION
-                const result = await askerCtl.ask(players, currentAsker);
-                
-                // 2. RESOLVE TARGET (Enforce: not self, and not the person who just asked you)
-                const target = resolveOtherPlayer(players, result.targetName, currentAsker.id, lastAsker?.id);
+                const rawAsk = await askerCtl.ask(players, currentAsker);
+                // Note: Assuming 'ask' returns the raw AI string or an object containing it
+                const askerThought = rawAsk.thought;
+                const targetName = rawAsk.targetName;
+                const question = rawAsk.question;
+
+                // Log Asker's Thought
+                if (askerThought) console.log(`\n💭 ${currentAsker.name}'s Strategy: "${askerThought}"`);
+
+                // 2. RESOLVE TARGET
+                const target = resolveOtherPlayer(players, targetName, currentAsker.id, lastAsker?.id);
                 const targetCtl = controllers.get(target.id)!;
 
                 // 3. TARGET ANSWERS
-                const answer = await targetCtl.answer(currentAsker.name, result.question);
+                const rawAnswer = await targetCtl.answer(currentAsker.name, question);
 
-                // 4. RECORD & LOG
-                turns.push({ askerId: currentAsker.name, targetId: target.name, question: result.question, answer });
-                console.log(`\n[Round ${roundCount}] ${currentAsker.name} ➔ ${target.name}\nQ: ${result.question}\nA: ${answer}`);
+                // Parse the components
+                const targetThought = parseField("THOUGHT", rawAnswer);
+                const publicAnswer = parseField("ANSWER", rawAnswer) || rawAnswer; // Fallback if parse fails
 
-                // 5. UPDATE STATE (Respondent becomes the next Asker)
+                // Log Target's Thought
+                if (targetThought) console.log(`💭 ${target.name}'s Logic: "${targetThought}"`);
+
+                // 4. RECORD & LOG PUBLIC TRANSCRIPT
+                turns.push({ askerId: currentAsker.name, targetId: target.name, question, answer: publicAnswer });
+
+                console.log(`\n[Round ${roundCount}] ${currentAsker.name} ➔ ${target.name}`);
+                console.log(`Q: ${question}`);
+                console.log(`A: ${publicAnswer}`);
+
+                // 5. UPDATE STATE
                 lastAsker = currentAsker;
                 currentAsker = target;
             }
@@ -138,14 +155,18 @@ export class SpyfallGame {
             const votes = new Map<string, number>();
             for (const p of players) {
                 const rawVote = await controllers.get(p.id)!.vote(players, turns, p);
+                const thought = parseField("THOUGHT", rawVote);
                 const voteName = parseField("VOTE", rawVote);
-                
+                const why = parseField("WHY", rawVote);
+
+                if (thought) console.log(`\n💭 ${p.name}'s Voting Logic: "${thought}"`);
+
                 const candidates = players.filter(x => x.id !== p.id);
                 const validCandidate = candidates.find(x => normalizeName(x.name) === normalizeName(voteName));
                 const finalVote = validCandidate?.name || safePickRandom(candidates, players[0]).name;
-                
+
                 votes.set(finalVote, (votes.get(finalVote) || 0) + 1);
-                console.log(`${p.name} voted for: ${finalVote}`);
+                console.log(`${p.name} voted for: ${finalVote} (${why})`);
             }
 
             // 3. TALLY & REVEAL
