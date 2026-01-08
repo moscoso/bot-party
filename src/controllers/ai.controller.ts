@@ -10,7 +10,8 @@ export class AIController implements PlayerController {
         const askText = await this.agent.say(buildAskerInstruction(players, self));
         return {
             targetName: parseField("TARGET", askText),
-            question: parseField("QUESTION", askText) || "What do you think of the atmosphere here?"
+            question: parseField("QUESTION", askText),
+            thought: parseField("THOUGHT", askText)
         };
     }
 
