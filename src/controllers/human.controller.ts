@@ -1,9 +1,17 @@
 import readline from "node:readline/promises";
 import { Player, Turn } from "../types";
-import { PlayerController, AskResult } from "./player.controller";
+import { PlayerController, AskResult, ReactContext, QuestionReactContext } from "./player.controller";
 
 export class HumanController implements PlayerController {
     constructor(private rl: ReturnType<typeof readline.createInterface>) {}
+    
+    async reactToQuestion(players: Player[], turns: Turn[], self: Player, q: QuestionReactContext): Promise<string> {
+        throw new Error("Method not implemented.");
+    }
+    
+    async react(players: Player[], turns: Turn[], self: Player, last: ReactContext): Promise<string> {
+        throw new Error("Method not implemented.");
+    }
 
     async ask(players: Player[], self: Player): Promise<AskResult> {
         const others = players.filter(p => p.id !== self.id).map(p => p.name);

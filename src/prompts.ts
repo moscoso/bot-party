@@ -1,11 +1,20 @@
 import { allLocationsList } from "./data";
 import { Player, PlayerSecret, Turn } from "./types";
 
+/**
+ * Converts a {@link PlayerSecret} into a short, player-facing brief.
+ * 
+ * Spies receive a warning with no location; civilians receive their location and role.
+ */
 export function secretToBrief(secret: PlayerSecret): string {
     if (secret.kind === "SPY") return "🕵️ YOU ARE THE SPY. You do NOT know the location. Blend in!";
     return `📍 Location: ${secret.location}\n👤 Your role: ${secret.role}`;
 }
 
+/**
+ * Builds the system prompt that defines a player's identity, tone, and behavior.
+ * Enforces casual, punchy Spyfall-style responses and injects role/location context.
+ */
 export function buildPlayerSystemPrompt(name: string, secret: PlayerSecret): string {
     return `You are playing Spyfall. STOP acting like a boring chat agent. Act like a person playing a party game with personality and/or attitude.
         RULES:
@@ -22,12 +31,20 @@ export function buildPlayerSystemPrompt(name: string, secret: PlayerSecret): str
     `;
 }
 
+/**
+ * Instructs the active player to ask a single strategic question to one other player.
+ * Includes guidance for both civilians (trap the spy) and spies (extract information).
+ */
 export function buildAskerInstruction(players: Player[], self: Player): string {
     const names = players.map(p => p.name).filter(n => n !== self.name).join(", ");
+     const tip = self.secret.kind === "SPY"
+        ? "TIP: Ask questions that sound normal but secretly narrow down the location. Or ask a question that would draw suspicion to someone else."
+        : "TIP: Ask something that a real person at the location would answer naturally. Or ask a weird question to throw off the spy.";
     return `
         Players you can ask: ${names}
         Your job: Ask ONE clever question to ONE player. 
-        Be tactical. If you are a civilian, try to trap or mislead the spy. If you are the spy, try to fish for info.
+        
+        ${tip}
 
         Return exactly in this format:
             THOUGHT: <your private internal reasoning about who is suspicious or what info you need>
@@ -36,6 +53,10 @@ export function buildAskerInstruction(players: Player[], self: Player): string {
     `;
 }
 
+/**
+ * Instructs a player on how to answer a question asked by another player.
+ * Requires internal reasoning plus a short, punchy public answer.
+ */
 export function buildAnswerInstruction(askerName: string, question: string): string {
     return `
     ${askerName} asked you: "${question}"
@@ -45,6 +66,10 @@ export function buildAnswerInstruction(askerName: string, question: string): str
     `;
 }
 
+/**
+ * Builds the final prompt for a caught spy to guess the location.
+ * Includes a full transcript recap and requires justification for the guess.
+ */
 export function buildSpyGuessPrompt(turns: Turn[]): string {
     const recap = turns
         .map(t => `${t.askerId} -> ${t.targetId}\nQ: ${t.question}\nA: ${t.answer}`)
@@ -61,6 +86,10 @@ export function buildSpyGuessPrompt(turns: Turn[]): string {
     `;
 }
 
+/**
+ * Builds the voting prompt for players to accuse who they believe is the spy.
+ * Includes a transcript recap and requires both private reasoning and a public explanation.
+ */
 export function buildVotePrompt(players: Player[], turns: Turn[], selfName: string): string {
     const recap = turns
         .map(t => `${t.askerId} asked ${t.targetId}: ${t.question}\nAnswer: ${t.answer}`)
