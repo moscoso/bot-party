@@ -61,18 +61,50 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 1rem 1.25rem;
+      padding: 0.5rem;
       min-height: 320px;
       max-height: 70vh;
       overflow: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
       font-size: 0.875rem;
-      line-height: 1.6;
     }
     #log:empty::before {
       content: "Click “Start game” to run a match. Output will stream here.";
       color: var(--muted);
+      padding: 1rem 1.25rem;
+      display: block;
+    }
+    .log-section {
+      margin-bottom: 0.25rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .log-section summary {
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      font-weight: 500;
+      color: var(--accent);
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      user-select: none;
+    }
+    .log-section summary::-webkit-details-marker { display: none; }
+    .log-section summary::before {
+      content: "▶";
+      font-size: 0.7em;
+      transition: transform 0.15s ease;
+    }
+    .log-section[open] summary::before { transform: rotate(90deg); }
+    .log-section .section-body {
+      padding: 0.75rem 1rem;
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
     }
   </style>
 </head>
@@ -85,12 +117,56 @@
     </div>
   </header>
   <main>
-    <pre id="log"></pre>
+    <div id="log"></div>
   </main>
   <script>
     const logEl = document.getElementById("log");
     const startBtn = document.getElementById("start");
     const statusEl = document.getElementById("status");
+
+    function sectionTitleFor(line) {
+      const roundMatch = line.match(/\[Round (\d+)\]/);
+      if (roundMatch) return "Round " + roundMatch[1];
+      if (line.includes("VOTING PHASE")) return "Voting";
+      if (line.includes("VERDICT")) return "Verdict";
+      if (line.includes("attempts a final guess")) return "Spy's guess";
+      if (line.includes("ACTUAL LOCATION")) return "Final score";
+      return null;
+    }
+
+    let currentSection = null;
+    let currentBody = null;
+
+    function startSection(title, firstLine) {
+      const details = document.createElement("details");
+      details.className = "log-section";
+      details.open = true;
+      const summary = document.createElement("summary");
+      summary.textContent = title;
+      const body = document.createElement("pre");
+      body.className = "section-body";
+      if (firstLine) body.appendChild(document.createTextNode(firstLine + "\n"));
+      details.appendChild(summary);
+      details.appendChild(body);
+      logEl.appendChild(details);
+      currentSection = details;
+      currentBody = body;
+    }
+
+    function appendLine(line) {
+      if (!currentBody) startSection("Intro", line);
+      else currentBody.appendChild(document.createTextNode(line + "\n"));
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function handleLine(line) {
+      const title = sectionTitleFor(line);
+      if (title) {
+        startSection(title, line);
+      } else {
+        appendLine(line);
+      }
+    }
 
     const es = new EventSource("/api/stream");
     es.onopen = () => {
@@ -100,10 +176,7 @@
     es.onmessage = (e) => {
       try {
         const { line } = JSON.parse(e.data);
-        if (line) {
-          logEl.appendChild(document.createTextNode(line + "\n"));
-          logEl.scrollTop = logEl.scrollHeight;
-        }
+        if (line) handleLine(line);
       } catch (_) {}
     };
     es.onerror = () => {
@@ -115,13 +188,17 @@
       startBtn.disabled = true;
       statusEl.textContent = "Starting…";
       statusEl.classList.add("live");
+      currentSection = null;
+      currentBody = null;
+      logEl.innerHTML = "";
       try {
         const r = await fetch("/api/start", { method: "POST" });
         if (!r.ok) throw new Error(await r.text());
         statusEl.textContent = "Game running — watch stream below";
       } catch (err) {
         statusEl.textContent = "Error: " + (err instanceof Error ? err.message : String(err));
-        logEl.appendChild(document.createTextNode("\n[Request failed: " + (err instanceof Error ? err.message : String(err)) + "]\n"));
+        logEl.innerHTML = "";
+        logEl.appendChild(document.createTextNode("[Request failed: " + (err instanceof Error ? err.message : String(err)) + "]"));
       } finally {
         startBtn.disabled = false;
       }
