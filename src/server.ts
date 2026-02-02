@@ -2,8 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { PromptEntry, AgentCreatedEntry } from "./agent";
 import { SpyfallGame, type GameInfoEntry } from "./game";
-import type { PromptEntry } from "./agent";
 import type { GameConfig } from "./types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -45,6 +45,17 @@ function broadcastGameInfo(info: GameInfoEntry): void {
     }
 }
 
+function broadcastAgentCreated(entry: AgentCreatedEntry): void {
+    const payload = `event: agentcreated\ndata: ${JSON.stringify(entry)}\n\n`;
+    for (const send of sseClients) {
+        try {
+            send(payload);
+        } catch {
+            // client may have disconnected
+        }
+    }
+}
+
 function handleStream(res: ServerResponse): void {
     res.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -69,9 +80,9 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
     const agentMode = params.get("mode") === "thread" ? "thread" : "memory";
 
     const config: GameConfig = {
-        numPlayers: 4,
+        numPlayers: 3,
         includeHuman: false,
-        rounds: 12,
+        rounds: 9,
         agentMode,
     };
 
@@ -79,6 +90,7 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
     game.onOutput = broadcast;
     game.onPrompt = broadcastPrompt;
     game.onGameInfo = broadcastGameInfo;
+    game.onAgentCreated = broadcastAgentCreated;
 
     res.writeHead(202, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, message: `Game started (mode: ${agentMode}). Watch the stream.` }));
@@ -92,6 +104,7 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
         game.onOutput = undefined;
         game.onPrompt = undefined;
         game.onGameInfo = undefined;
+        game.onAgentCreated = undefined;
     }
 }
 

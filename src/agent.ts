@@ -17,12 +17,19 @@ export type PromptEntry = {
     response: string;
 };
 
+export type AgentCreatedEntry = {
+    agentName: string;
+    mode: AgentMode;
+    systemPrompt: string;
+};
+
 export type AgentOptions = {
     name: string;
     systemPrompt: string;
     /** "memory" = Chat Completions with full history; "thread" = Assistants API with server-side thread. Default: "memory". */
     mode?: AgentMode;
     onPrompt?: (entry: PromptEntry) => void;
+    onAgentCreated?: (entry: AgentCreatedEntry) => void;
 };
 
 let promptIdCounter = 0;
@@ -35,6 +42,7 @@ export class Agent {
     private readonly mode: AgentMode;
     private readonly systemPrompt: string;
     private onPrompt?: (entry: PromptEntry) => void;
+    private onAgentCreated?: (entry: AgentCreatedEntry) => void;
 
     // Memory mode state
     private memory: Msg[] = [];
@@ -44,17 +52,23 @@ export class Agent {
     private threadId?: string;
     private threadReady?: Promise<void>;
 
+    /** Resolves when the agent is fully initialized (awaitable before using). */
+    public readonly ready: Promise<void>;
+
     constructor(opts: AgentOptions) {
         this.name = opts.name;
         this.systemPrompt = opts.systemPrompt;
         this.mode = opts.mode ?? "memory";
         this.onPrompt = opts.onPrompt;
+        this.onAgentCreated = opts.onAgentCreated;
 
         if (this.mode === "memory") {
             this.memory.push({ role: "system", content: this.systemPrompt });
+            this.ready = Promise.resolve();
         } else {
-            // Initialize thread mode asynchronously; say() will await this.
+            // Initialize thread mode asynchronously
             this.threadReady = this.initThread();
+            this.ready = this.threadReady;
         }
     }
 
@@ -68,6 +82,11 @@ export class Agent {
 
         const thread = await openai.beta.threads.create();
         this.threadId = thread.id;
+    }
+
+    /** Emit the agent created event. Call this after the agent is ready and when you want it logged. */
+    emitCreated(): void {
+        this.onAgentCreated?.({ agentName: this.name, mode: this.mode, systemPrompt: this.systemPrompt });
     }
 
     async say(userContent: string, phase: PromptType = "ask a question"): Promise<string> {
@@ -103,9 +122,8 @@ export class Agent {
         await this.threadReady;
         const id = nextPromptId();
 
-        // For inspection: show system prompt + this user message (thread history is server-side)
+        // For inspection: only show user message (system prompt was logged on agent creation)
         const messagesForInspect: Msg[] = [
-            { role: "system", content: this.systemPrompt + "\n\n(Thread mode: full history stored server-side)" },
             { role: "user", content: userContent },
         ];
 

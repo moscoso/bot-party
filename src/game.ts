@@ -1,7 +1,7 @@
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { LOCATIONS, allLocationsList } from "./data";
-import { Agent, type PromptEntry } from "./agent";
+import { Agent, type PromptEntry, type AgentCreatedEntry } from "./agent";
 import { AIController, HumanController, PlayerController } from "./controllers";
 import { GameConfig, Player, PlayerId, PlayerSecret, Turn } from "./types";
 import { parseField, buildPlayerSystemPrompt, secretToBrief } from "./prompts";
@@ -96,6 +96,8 @@ export class SpyfallGame {
     public onPrompt?: (entry: PromptEntry) => void;
     /** When set, game setup info is sent here (for debug/inspection). */
     public onGameInfo?: (info: GameInfoEntry) => void;
+    /** When set, agent creation info is sent here (for debug/inspection). */
+    public onAgentCreated?: (entry: AgentCreatedEntry) => void;
 
     private log(msg: string): void {
         console.log(msg);
@@ -116,6 +118,7 @@ export class SpyfallGame {
             agents = setup.agents;
             this.revealHumanIdentity(players);
             this.emitGameInfo(pack, players, config);
+            agents.forEach(a => a.emitCreated());
             const turns = await this.runQuestionRounds(config.rounds, players, controllers);
             const votes = await this.runVotingPhase(players, controllers, turns);
             const { accusedName, isTie, spy } = this.tallyVotes(votes, players);
@@ -158,11 +161,16 @@ export class SpyfallGame {
                     systemPrompt: buildPlayerSystemPrompt(p.name, p.secret),
                     mode: agentMode,
                     onPrompt: this.onPrompt,
+                    onAgentCreated: this.onAgentCreated,
                 });
                 agents.push(agent);
                 controllers.set(p.id, new AIController(agent));
             }
         }
+
+        // Wait for all agents to be fully initialized before proceeding
+        await Promise.all(agents.map(a => a.ready));
+
         return { pack, players, controllers, agents };
     }
 

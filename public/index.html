@@ -294,10 +294,39 @@
         appendGameInfo(info);
       } catch (_) {}
     });
+    es.addEventListener("agentcreated", (e) => {
+      try {
+        const entry = JSON.parse(e.data);
+        appendAgentCreated(entry);
+      } catch (_) {}
+    });
     es.onerror = () => {
       statusEl.textContent = "Reconnecting…";
       statusEl.classList.remove("live");
     };
+
+    function appendAgentCreated(entry) {
+      if (!currentBody) startSection("Intro", null);
+
+      const details = document.createElement("details");
+      details.className = "inspect-inline";
+      const summary = document.createElement("summary");
+      summary.textContent = "🤖 Agent Created: " + entry.agentName + " (" + entry.mode + " mode)";
+      details.appendChild(summary);
+
+      const block = document.createElement("div");
+      block.className = "debug-block";
+      const label = document.createElement("div");
+      label.className = "debug-label";
+      label.textContent = "System Prompt";
+      block.appendChild(label);
+      const pre = document.createElement("pre");
+      pre.textContent = entry.systemPrompt;
+      block.appendChild(pre);
+      details.appendChild(block);
+      currentBody.appendChild(details);
+      maybeScrollToBottom();
+    }
 
     function appendGameInfo(info) {
       if (!currentBody) startSection("Intro", null);
