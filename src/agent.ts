@@ -1,44 +1,154 @@
-import OpenAI from "openai";
-import dotenv from "dotenv";
-dotenv.config();
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const MODEL = process.env.OPENAI_MODEL || "gpt-5.2";
+import { openai, MODEL, type AgentMode } from "./openai";
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
 export type PromptType = "ask a question" | "answer a question" | "vote" | "guess the location";
 
 export type PromptEntry = {
+    /** Unique ID to correlate sent/received events */
+    id: string;
+    /** "sent" = prompt going out; "received" = response back */
+    kind: "sent" | "received";
     phase: PromptType;
     agentName: string;
+    /** Messages sent (in "sent") or empty (in "received"). */
     messages: Msg[];
+    /** Empty in "sent", populated in "received". */
     response: string;
 };
 
+export type AgentOptions = {
+    name: string;
+    systemPrompt: string;
+    /** "memory" = Chat Completions with full history; "thread" = Assistants API with server-side thread. Default: "memory". */
+    mode?: AgentMode;
+    onPrompt?: (entry: PromptEntry) => void;
+};
+
+let promptIdCounter = 0;
+function nextPromptId(): string {
+    return `prompt-${++promptIdCounter}`;
+}
+
 export class Agent {
-    private memory: Msg[] = [];
+    public readonly name: string;
+    private readonly mode: AgentMode;
+    private readonly systemPrompt: string;
     private onPrompt?: (entry: PromptEntry) => void;
 
-    constructor(public name: string, systemPrompt: string, onPrompt?: (entry: PromptEntry) => void) {
-        this.memory.push({ role: "system", content: systemPrompt });
-        this.onPrompt = onPrompt;
+    // Memory mode state
+    private memory: Msg[] = [];
+
+    // Thread mode state
+    private assistantId?: string;
+    private threadId?: string;
+    private threadReady?: Promise<void>;
+
+    constructor(opts: AgentOptions) {
+        this.name = opts.name;
+        this.systemPrompt = opts.systemPrompt;
+        this.mode = opts.mode ?? "memory";
+        this.onPrompt = opts.onPrompt;
+
+        if (this.mode === "memory") {
+            this.memory.push({ role: "system", content: this.systemPrompt });
+        } else {
+            // Initialize thread mode asynchronously; say() will await this.
+            this.threadReady = this.initThread();
+        }
+    }
+
+    private async initThread(): Promise<void> {
+        const assistant = await openai.beta.assistants.create({
+            name: this.name,
+            instructions: this.systemPrompt,
+            model: MODEL,
+        });
+        this.assistantId = assistant.id;
+
+        const thread = await openai.beta.threads.create();
+        this.threadId = thread.id;
     }
 
     async say(userContent: string, phase: PromptType = "ask a question"): Promise<string> {
+        if (this.mode === "memory") {
+            return this.sayWithMemory(userContent, phase);
+        } else {
+            return this.sayWithThread(userContent, phase);
+        }
+    }
+
+    private async sayWithMemory(userContent: string, phase: PromptType): Promise<string> {
         this.memory.push({ role: "user", content: userContent });
         const messagesSent = [...this.memory];
+        const id = nextPromptId();
+
+        // Fire "sent" before API call
+        this.onPrompt?.({ id, kind: "sent", phase, agentName: this.name, messages: messagesSent, response: "" });
 
         const resp = await openai.chat.completions.create({
             model: MODEL,
             messages: this.memory,
-            reasoning_effort: "medium",
         });
 
         const text = resp.choices[0]?.message?.content?.trim() || "(no response)";
         this.memory.push({ role: "assistant", content: text });
 
-        this.onPrompt?.({ phase, agentName: this.name, messages: messagesSent, response: text });
+        // Fire "received" after response
+        this.onPrompt?.({ id, kind: "received", phase, agentName: this.name, messages: [], response: text });
         return text;
+    }
+
+    private async sayWithThread(userContent: string, phase: PromptType): Promise<string> {
+        await this.threadReady;
+        const id = nextPromptId();
+
+        // For inspection: show system prompt + this user message (thread history is server-side)
+        const messagesForInspect: Msg[] = [
+            { role: "system", content: this.systemPrompt + "\n\n(Thread mode: full history stored server-side)" },
+            { role: "user", content: userContent },
+        ];
+
+        // Fire "sent" before API call
+        this.onPrompt?.({ id, kind: "sent", phase, agentName: this.name, messages: messagesForInspect, response: "" });
+
+        // Add user message to thread
+        await openai.beta.threads.messages.create(this.threadId!, {
+            role: "user",
+            content: userContent,
+        });
+
+        // Run the assistant
+        const run = await openai.beta.threads.runs.createAndPoll(this.threadId!, {
+            assistant_id: this.assistantId!,
+        });
+
+        if (run.status !== "completed") {
+            const errMsg = `Run failed with status: ${run.status}`;
+            this.onPrompt?.({ id, kind: "received", phase, agentName: this.name, messages: [], response: errMsg });
+            return errMsg;
+        }
+
+        // Get latest assistant message
+        const messages = await openai.beta.threads.messages.list(this.threadId!, { limit: 1, order: "desc" });
+        const lastMsg = messages.data[0];
+        const textBlock = lastMsg?.content?.find((c) => c.type === "text");
+        const text = (textBlock?.type === "text" ? textBlock.text?.value?.trim() : null) || "(no response)";
+
+        // Fire "received" after response
+        this.onPrompt?.({ id, kind: "received", phase, agentName: this.name, messages: [], response: text });
+        return text;
+    }
+
+    /** Cleanup: delete assistant and thread (call when done with this agent). */
+    async cleanup(): Promise<void> {
+        if (this.mode === "thread" && this.assistantId) {
+            try {
+                await openai.beta.threads.delete(this.threadId!);
+                await openai.beta.assistants.delete(this.assistantId);
+            } catch {
+                // Ignore cleanup errors
+            }
+        }
     }
 }

@@ -53,11 +53,15 @@ function handleStream(res: ServerResponse): void {
     });
 }
 
-async function handleStart(res: ServerResponse): Promise<void> {
-    const defaultConfig: GameConfig = {
+async function handleStart(res: ServerResponse, queryString: string): Promise<void> {
+    const params = new URLSearchParams(queryString);
+    const agentMode = params.get("mode") === "thread" ? "thread" : "memory";
+
+    const config: GameConfig = {
         numPlayers: 4,
         includeHuman: false,
         rounds: 12,
+        agentMode,
     };
 
     const game = new SpyfallGame();
@@ -65,10 +69,10 @@ async function handleStart(res: ServerResponse): Promise<void> {
     game.onPrompt = broadcastPrompt;
 
     res.writeHead(202, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, message: "Game started. Watch the stream." }));
+    res.end(JSON.stringify({ ok: true, message: `Game started (mode: ${agentMode}). Watch the stream.` }));
 
     try {
-        await game.run(defaultConfig);
+        await game.run(config);
         broadcast("\n[Game over.]");
     } catch (err) {
         broadcast(`\n[Error: ${err instanceof Error ? err.message : String(err)}]`);
@@ -87,14 +91,14 @@ function serveHtml(res: ServerResponse): void {
 
 const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     const url = req.url ?? "/";
-    const path = url.split("?")[0];
+    const [path, queryString] = url.split("?");
 
     if (path === "/api/stream" && req.method === "GET") {
         handleStream(res);
         return;
     }
     if (path === "/api/start" && req.method === "POST") {
-        void handleStart(res);
+        void handleStart(res, queryString ?? "");
         return;
     }
     if (path === "/" && req.method === "GET") {

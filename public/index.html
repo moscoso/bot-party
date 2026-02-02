@@ -136,6 +136,10 @@
     }
     .inspect-inline .debug-block + .debug-block { border-top: 1px solid var(--border); }
     .inspect-inline .debug-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.15rem; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
   </style>
 </head>
 <body>
@@ -143,6 +147,13 @@
     <h1>🕵️ Bot Party — Spyfall</h1>
     <div class="controls">
       <span id="status" class="status">Disconnected</span>
+      <label style="font-size:0.8rem;color:var(--muted);">
+        Mode:
+        <select id="agentMode" style="font:inherit;padding:0.3rem 0.5rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;">
+          <option value="memory">Memory (Chat Completions)</option>
+          <option value="thread">Thread (Assistants API)</option>
+        </select>
+      </label>
       <button id="start" type="button">Start game</button>
     </div>
   </header>
@@ -153,6 +164,7 @@
     const logEl = document.getElementById("log");
     const startBtn = document.getElementById("start");
     const statusEl = document.getElementById("status");
+    const agentModeEl = document.getElementById("agentMode");
 
     function sectionTitleFor(line) {
       const roundMatch = line.match(/\[Round (\d+)\]/);
@@ -200,32 +212,53 @@
     function appendDebugEntry(entry) {
       if (!currentBody) startSection("Intro", null);
       const phase = entry.phase.charAt(0).toUpperCase() + entry.phase.slice(1);
-      const details = document.createElement("details");
-      details.className = "inspect-inline";
-      const summary = document.createElement("summary");
-      summary.textContent = "📋 " + phase + " (" + entry.agentName + ") — prompt & response";
-      details.appendChild(summary);
-      const promptBlock = document.createElement("div");
-      promptBlock.className = "debug-block";
-      const promptLabel = document.createElement("div");
-      promptLabel.className = "debug-label";
-      promptLabel.textContent = "Prompt (messages sent)";
-      promptBlock.appendChild(promptLabel);
-      const promptPre = document.createElement("pre");
-      promptPre.textContent = (entry.messages || []).map(function(m) { return "[" + m.role + "]\n" + m.content; }).join("\n\n");
-      promptBlock.appendChild(promptPre);
-      details.appendChild(promptBlock);
-      const responseBlock = document.createElement("div");
-      responseBlock.className = "debug-block";
-      const responseLabel = document.createElement("div");
-      responseLabel.className = "debug-label";
-      responseLabel.textContent = "Response";
-      responseBlock.appendChild(responseLabel);
-      const responsePre = document.createElement("pre");
-      responsePre.textContent = entry.response || "(empty)";
-      responseBlock.appendChild(responsePre);
-      details.appendChild(responseBlock);
-      currentBody.appendChild(details);
+
+      if (entry.kind === "sent") {
+        // Create new panel with loading indicator
+        const details = document.createElement("details");
+        details.className = "inspect-inline";
+        details.setAttribute("data-prompt-id", entry.id);
+        const summary = document.createElement("summary");
+        summary.textContent = "📋 " + phase + " (" + entry.agentName + ") — prompt & response";
+        details.appendChild(summary);
+
+        // Prompt block
+        const promptBlock = document.createElement("div");
+        promptBlock.className = "debug-block";
+        const promptLabel = document.createElement("div");
+        promptLabel.className = "debug-label";
+        promptLabel.textContent = "Prompt (messages sent)";
+        promptBlock.appendChild(promptLabel);
+        const promptPre = document.createElement("pre");
+        promptPre.textContent = (entry.messages || []).map(function(m) { return "[" + m.role + "]\n" + m.content; }).join("\n\n");
+        promptBlock.appendChild(promptPre);
+        details.appendChild(promptBlock);
+
+        // Response block with loading indicator
+        const responseBlock = document.createElement("div");
+        responseBlock.className = "debug-block";
+        responseBlock.setAttribute("data-response-block", "true");
+        const responseLabel = document.createElement("div");
+        responseLabel.className = "debug-label";
+        responseLabel.textContent = "Response";
+        responseBlock.appendChild(responseLabel);
+        const responsePre = document.createElement("pre");
+        responsePre.className = "response-content";
+        responsePre.innerHTML = '<span style="color:var(--muted);animation:pulse 1.5s ease-in-out infinite;">⏳ Waiting for response...</span>';
+        responseBlock.appendChild(responsePre);
+        details.appendChild(responseBlock);
+
+        currentBody.appendChild(details);
+      } else {
+        // Find existing panel and update response
+        const panel = document.querySelector('[data-prompt-id="' + entry.id + '"]');
+        if (panel) {
+          const responsePre = panel.querySelector('.response-content');
+          if (responsePre) {
+            responsePre.textContent = entry.response || "(empty)";
+          }
+        }
+      }
       maybeScrollToBottom();
     }
 
@@ -268,9 +301,10 @@
       currentBody = null;
       logEl.innerHTML = "";
       try {
-        const r = await fetch("/api/start", { method: "POST" });
+        const mode = agentModeEl.value;
+        const r = await fetch("/api/start?mode=" + encodeURIComponent(mode), { method: "POST" });
         if (!r.ok) throw new Error(await r.text());
-        statusEl.textContent = "Game running — watch stream below";
+        statusEl.textContent = "Game running (" + mode + ") — watch stream below";
       } catch (err) {
         statusEl.textContent = "Error: " + (err instanceof Error ? err.message : String(err));
         logEl.innerHTML = "";

@@ -21,5 +21,7 @@ export type Turn = {
 export type GameConfig = {
     numPlayers: number; // includes human if enabled
     includeHuman: boolean;
-    rounds: number; // number of Q/A turns (not “full cycles”)
+    rounds: number; // number of Q/A turns (not "full cycles")
+    /** Agent mode: "memory" sends full chat history each time; "thread" uses OpenAI Assistants API. Default: "memory". */
+    agentMode?: "memory" | "thread";
 };

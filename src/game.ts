@@ -68,6 +68,7 @@ type GameSetup = {
     pack: (typeof LOCATIONS)[number];
     players: Player[];
     controllers: Map<PlayerId, PlayerController>;
+    agents: Agent[];
 };
 
 type TallyResult = {
@@ -98,8 +99,11 @@ export class SpyfallGame {
             this.rl = readline.createInterface({ input, output });
         }
 
+        let agents: Agent[] = [];
         try {
-            const { pack, players, controllers } = this.setupGame(config);
+            const setup = await this.setupGame(config);
+            const { pack, players, controllers } = setup;
+            agents = setup.agents;
             this.revealHumanIdentity(players);
             const turns = await this.runQuestionRounds(config.rounds, players, controllers);
             const votes = await this.runVotingPhase(players, controllers, turns);
@@ -108,16 +112,19 @@ export class SpyfallGame {
             const spyGuessedRight = await this.runSpyGuessIfEligible(accusedName, isTie, spy, pack, controllers, turns);
             this.printFinalScore(pack, accusedName, spy, spyGuessedRight);
         } finally {
+            // Cleanup agents (deletes assistants/threads in thread mode)
+            await Promise.all(agents.map(a => a.cleanup()));
             this.rl?.close();
             this.rl = null;
             this.running = false;
         }
     }
 
-    private setupGame(config: GameConfig): GameSetup {
+    private async setupGame(config: GameConfig): Promise<GameSetup> {
         const pack = pickRandom(LOCATIONS);
         const spyIndex = Math.floor(Math.random() * config.numPlayers);
         const roles = shuffle(pack.roles).slice(0, config.numPlayers - 1);
+        const agentMode = config.agentMode ?? "memory";
 
         const players: Player[] = [];
         for (let i = 0; i < config.numPlayers; i++) {
@@ -130,13 +137,22 @@ export class SpyfallGame {
         }
 
         const controllers = new Map<PlayerId, PlayerController>();
+        const agents: Agent[] = [];
         for (const p of players) {
-            controllers.set(p.id, p.isHuman
-                ? new HumanController(this.rl!)
-                : new AIController(new Agent(p.name, buildPlayerSystemPrompt(p.name, p.secret), this.onPrompt))
-            );
+            if (p.isHuman) {
+                controllers.set(p.id, new HumanController(this.rl!));
+            } else {
+                const agent = new Agent({
+                    name: p.name,
+                    systemPrompt: buildPlayerSystemPrompt(p.name, p.secret),
+                    mode: agentMode,
+                    onPrompt: this.onPrompt,
+                });
+                agents.push(agent);
+                controllers.set(p.id, new AIController(agent));
+            }
         }
-        return { pack, players, controllers };
+        return { pack, players, controllers, agents };
     }
 
     private revealHumanIdentity(players: Player[]): void {

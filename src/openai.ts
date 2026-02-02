@@ -7,3 +7,10 @@ export const openai = new OpenAI({
 });
 
 export const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+
+/** Agent mode */
+export type AgentMode = 
+    /** "memory" sends full chat each time (Chat Completions) */
+    "memory" | 
+    /** "thread" uses server-side threads (Assistants API) */
+    "thread";

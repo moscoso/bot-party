@@ -4,7 +4,8 @@ const game = new SpyfallGame();
 console.log("Starting Spyfall...");
 
 await game.run({
-    numPlayers: 4,       // total players
+    numPlayers: 3,       // total players
     includeHuman: false,  // set false for AI-only
-    rounds: 12            // number of Q/A turns
+    rounds: 9,           // number of Q/A turns
+    agentMode: "memory",  // "memory" = Chat Completions (send full history); "thread" = Assistants API (server-side thread)
 });
