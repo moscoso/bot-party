@@ -1,6 +1,6 @@
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { LOCATIONS } from "./data";
+import { LOCATIONS, allLocationsList } from "./data";
 import { Agent, type PromptEntry } from "./agent";
 import { AIController, HumanController, PlayerController } from "./controllers";
 import { GameConfig, Player, PlayerId, PlayerSecret, Turn } from "./types";
@@ -79,6 +79,14 @@ type TallyResult = {
 
 export type GameReporter = (line: string) => void;
 
+export type GameInfoEntry = {
+    location: string;
+    allLocations: string[];
+    roles: string[];
+    players: Array<{ name: string; role: string; isSpy: boolean }>;
+    config: GameConfig;
+};
+
 export class SpyfallGame {
     private rl: ReturnType<typeof readline.createInterface> | null = null;
     private running = false;
@@ -86,6 +94,8 @@ export class SpyfallGame {
     public onOutput?: GameReporter;
     /** When set, each AI prompt/response pair is sent here (e.g. for inspection). */
     public onPrompt?: (entry: PromptEntry) => void;
+    /** When set, game setup info is sent here (for debug/inspection). */
+    public onGameInfo?: (info: GameInfoEntry) => void;
 
     private log(msg: string): void {
         console.log(msg);
@@ -105,6 +115,7 @@ export class SpyfallGame {
             const { pack, players, controllers } = setup;
             agents = setup.agents;
             this.revealHumanIdentity(players);
+            this.emitGameInfo(pack, players, config);
             const turns = await this.runQuestionRounds(config.rounds, players, controllers);
             const votes = await this.runVotingPhase(players, controllers, turns);
             const { accusedName, isTie, spy } = this.tallyVotes(votes, players);
@@ -158,6 +169,25 @@ export class SpyfallGame {
     private revealHumanIdentity(players: Player[]): void {
         const human = players.find(p => p.isHuman);
         if (human) this.log(`\n=== YOUR IDENTITY ===\n${secretToBrief(human.secret)}\n=====================\n`);
+    }
+
+    private emitGameInfo(pack: (typeof LOCATIONS)[number], players: Player[], config: GameConfig): void {
+        if (!this.onGameInfo) return;
+
+        const allLocs = LOCATIONS.map(l => l.location);
+        const playerInfo = players.map(p => ({
+            name: p.name,
+            role: p.secret.kind === "SPY" ? "SPY" : p.secret.role,
+            isSpy: p.secret.kind === "SPY",
+        }));
+
+        this.onGameInfo({
+            location: pack.location,
+            allLocations: allLocs,
+            roles: pack.roles,
+            players: playerInfo,
+            config,
+        });
     }
 
     private async runQuestionRounds(

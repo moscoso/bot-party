@@ -288,10 +288,50 @@
         appendDebugEntry(entry);
       } catch (_) {}
     });
+    es.addEventListener("gameinfo", (e) => {
+      try {
+        const info = JSON.parse(e.data);
+        appendGameInfo(info);
+      } catch (_) {}
+    });
     es.onerror = () => {
       statusEl.textContent = "Reconnecting…";
       statusEl.classList.remove("live");
     };
+
+    function appendGameInfo(info) {
+      if (!currentBody) startSection("Intro", null);
+
+      const details = document.createElement("details");
+      details.className = "inspect-inline";
+      const summary = document.createElement("summary");
+      summary.textContent = "🎮 Game Setup — location, roles, spy (spoilers!)";
+      details.appendChild(summary);
+
+      const block = document.createElement("div");
+      block.className = "debug-block";
+      const pre = document.createElement("pre");
+
+      let text = "📍 LOCATION: " + info.location + "\n\n";
+      text += "👥 PLAYERS:\n";
+      info.players.forEach(function(p) {
+        const marker = p.isSpy ? "🕵️ SPY" : p.role;
+        text += "  • " + p.name + ": " + marker + "\n";
+      });
+      text += "\n📋 ROLES AT THIS LOCATION:\n  " + info.roles.join(", ") + "\n";
+      text += "\n🗺️ ALL POSSIBLE LOCATIONS:\n  " + info.allLocations.join(", ") + "\n";
+      text += "\n⚙️ CONFIG:\n";
+      text += "  • Players: " + info.config.numPlayers + "\n";
+      text += "  • Rounds: " + info.config.rounds + "\n";
+      text += "  • Agent mode: " + (info.config.agentMode || "memory") + "\n";
+      text += "  • Human player: " + (info.config.includeHuman ? "yes" : "no");
+
+      pre.textContent = text;
+      block.appendChild(pre);
+      details.appendChild(block);
+      currentBody.appendChild(details);
+      maybeScrollToBottom();
+    }
 
     startBtn.addEventListener("click", async () => {
       startBtn.disabled = true;

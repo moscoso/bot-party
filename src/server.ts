@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SpyfallGame } from "./game";
+import { SpyfallGame, type GameInfoEntry } from "./game";
 import type { PromptEntry } from "./agent";
 import type { GameConfig } from "./types";
 
@@ -25,6 +25,17 @@ function broadcast(line: string): void {
 
 function broadcastPrompt(entry: PromptEntry): void {
     const payload = `event: prompt\ndata: ${JSON.stringify(entry)}\n\n`;
+    for (const send of sseClients) {
+        try {
+            send(payload);
+        } catch {
+            // client may have disconnected
+        }
+    }
+}
+
+function broadcastGameInfo(info: GameInfoEntry): void {
+    const payload = `event: gameinfo\ndata: ${JSON.stringify(info)}\n\n`;
     for (const send of sseClients) {
         try {
             send(payload);
@@ -67,6 +78,7 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
     const game = new SpyfallGame();
     game.onOutput = broadcast;
     game.onPrompt = broadcastPrompt;
+    game.onGameInfo = broadcastGameInfo;
 
     res.writeHead(202, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, message: `Game started (mode: ${agentMode}). Watch the stream.` }));
@@ -79,6 +91,7 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
     } finally {
         game.onOutput = undefined;
         game.onPrompt = undefined;
+        game.onGameInfo = undefined;
     }
 }
 
