@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { readFileSync, existsSync } from "node:fs";
+import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PromptEntry, AgentCreatedEntry } from "./agent";
 import { SpyfallGame, type GameInfoEntry } from "./game";
@@ -137,11 +137,39 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
     }
 }
 
-function serveHtml(res: ServerResponse): void {
-    const path = join(__dirname, "..", "public", "index.html");
-    const html = readFileSync(path, "utf-8");
-    res.writeHead(200, { "Content-Type": "text/html" });
-    res.end(html);
+const MIME_TYPES: Record<string, string> = {
+    ".html": "text/html",
+    ".css": "text/css",
+    ".js": "application/javascript",
+    ".json": "application/json",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".svg": "image/svg+xml",
+};
+
+function serveStatic(res: ServerResponse, filePath: string): boolean {
+    const fullPath = join(__dirname, "..", "public", filePath);
+    
+    // Security: prevent path traversal
+    if (!fullPath.startsWith(join(__dirname, "..", "public"))) {
+        return false;
+    }
+    
+    if (!existsSync(fullPath)) {
+        return false;
+    }
+    
+    const ext = extname(fullPath).toLowerCase();
+    const contentType = MIME_TYPES[ext] || "application/octet-stream";
+    
+    try {
+        const content = readFileSync(fullPath);
+        res.writeHead(200, { "Content-Type": contentType });
+        res.end(content);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 const server = createServer((req: IncomingMessage, res: ServerResponse) => {
@@ -161,9 +189,12 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
         void handleStart(res, queryString ?? "");
         return;
     }
-    if (path === "/" && req.method === "GET") {
-        serveHtml(res);
-        return;
+    // Serve static files from public/
+    if (req.method === "GET") {
+        const filePath = path === "/" ? "index.html" : path.slice(1); // Remove leading /
+        if (serveStatic(res, filePath)) {
+            return;
+        }
     }
 
     res.writeHead(404, { "Content-Type": "text/plain" });

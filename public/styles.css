@@ -1,0 +1,395 @@
+:root {
+	--bg: #0f0f12;
+	--surface: #1a1a20;
+	--surface-hover: #252530;
+	--text: #e4e4e7;
+	--muted: #71717a;
+	--accent: #a78bfa;
+	--accent-dim: #7c5fc4;
+	--green: #22c55e;
+	--red: #ef4444;
+	--border: #27272a;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+	background: var(--bg);
+	color: var(--text);
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+header {
+	padding: 1rem 1.5rem;
+	border-bottom: 1px solid var(--border);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+h1 {
+	margin: 0;
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: var(--accent);
+}
+
+.status {
+	font-size: 0.875rem;
+	color: var(--muted);
+}
+
+.status.live {
+	color: var(--green);
+}
+
+/* Config Panel - Centered */
+#configPanel {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2rem;
+}
+
+.config-card {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	padding: 2rem;
+	width: 100%;
+	max-width: 500px;
+}
+
+.config-card h2 {
+	margin: 0 0 1.5rem 0;
+	font-size: 1.1rem;
+	color: var(--accent);
+	text-align: center;
+}
+
+.config-section {
+	margin-bottom: 1.5rem;
+}
+
+.config-section:last-child {
+	margin-bottom: 0;
+}
+
+.config-label {
+	font-size: 0.8rem;
+	color: var(--muted);
+	margin-bottom: 0.5rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+/* Player List */
+.player-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.player-slot {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 0.5rem 0.75rem;
+}
+
+.player-slot .player-num {
+	font-size: 0.75rem;
+	color: var(--muted);
+	min-width: 1.5rem;
+}
+
+.player-slot select {
+	font: inherit;
+	font-size: 0.875rem;
+	padding: 0.4rem 0.5rem;
+	background: var(--surface);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.player-slot select:hover {
+	border-color: var(--accent);
+}
+
+.player-slot .type-select {
+	flex: 1;
+}
+
+.player-slot .mode-select {
+	width: 90px;
+	font-size: 0.75rem;
+	padding: 0.35rem 0.4rem;
+}
+
+.player-slot .mode-select:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.player-slot .remove-btn {
+	background: transparent;
+	border: none;
+	color: var(--muted);
+	cursor: pointer;
+	padding: 0.25rem;
+	font-size: 1rem;
+	line-height: 1;
+	border-radius: 4px;
+}
+
+.player-slot .remove-btn:hover {
+	color: var(--red);
+	background: rgba(239, 68, 68, 0.1);
+}
+
+.add-player-btn {
+	width: 100%;
+	padding: 0.6rem;
+	margin-top: 0.5rem;
+	background: transparent;
+	border: 1px dashed var(--border);
+	color: var(--muted);
+	border-radius: 6px;
+	cursor: pointer;
+	font: inherit;
+	font-size: 0.8rem;
+}
+
+.add-player-btn:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+	background: rgba(167, 139, 250, 0.05);
+}
+
+/* Settings Row */
+.settings-row {
+	display: flex;
+	gap: 1rem;
+}
+
+.settings-row .setting {
+	flex: 1;
+}
+
+.setting label {
+	display: block;
+	font-size: 0.75rem;
+	color: var(--muted);
+	margin-bottom: 0.35rem;
+}
+
+.setting select,
+.setting input {
+	width: 100%;
+	font: inherit;
+	font-size: 0.875rem;
+	padding: 0.5rem;
+	background: var(--bg);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+}
+
+.setting select:hover,
+.setting input:hover {
+	border-color: var(--accent);
+}
+
+/* Start Button */
+.start-btn {
+	width: 100%;
+	padding: 0.875rem 1.5rem;
+	margin-top: 1.5rem;
+	background: var(--accent);
+	color: var(--bg);
+	border: none;
+	border-radius: 8px;
+	cursor: pointer;
+	font: inherit;
+	font-size: 1rem;
+	font-weight: 600;
+	transition: all 0.15s ease;
+}
+
+.start-btn:hover {
+	filter: brightness(1.1);
+	transform: translateY(-1px);
+}
+
+.start-btn:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+	transform: none;
+}
+
+/* Back button */
+.back-btn {
+	background: var(--surface);
+	color: var(--text);
+	border: 1px solid var(--border);
+	padding: 0.4rem 0.75rem;
+	border-radius: 6px;
+	cursor: pointer;
+	font: inherit;
+	font-size: 0.8rem;
+}
+
+.back-btn:hover {
+	background: var(--surface-hover);
+	border-color: var(--accent);
+}
+
+/* Game Panel */
+#gamePanel {
+	flex: 1;
+	padding: 1rem 1.5rem;
+	overflow: auto;
+	display: none;
+}
+
+#gamePanel.active {
+	display: block;
+}
+
+#configPanel.hidden {
+	display: none;
+}
+
+/* Log styles */
+#log {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 0.5rem;
+	min-height: 320px;
+	max-height: 75vh;
+	overflow: auto;
+	font-size: 0.875rem;
+}
+
+#log:empty::before {
+	content: "Waiting for game to start...";
+	color: var(--muted);
+	padding: 1rem 1.25rem;
+	display: block;
+}
+
+.log-section {
+	margin-bottom: 0.25rem;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.log-section summary {
+	padding: 0.5rem 0.75rem;
+	cursor: pointer;
+	font-weight: 500;
+	color: var(--accent);
+	list-style: none;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	user-select: none;
+}
+
+.log-section summary::-webkit-details-marker {
+	display: none;
+}
+
+.log-section summary::before {
+	content: "▶";
+	font-size: 0.7em;
+	transition: transform 0.15s ease;
+}
+
+.log-section[open] summary::before {
+	transform: rotate(90deg);
+}
+
+.log-section .section-body {
+	padding: 0.75rem 1rem;
+	margin: 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+	line-height: 1.6;
+	border-top: 1px solid var(--border);
+	background: var(--bg);
+}
+
+.inspect-inline {
+	margin: 0.35rem 0;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	overflow: hidden;
+	background: var(--surface);
+}
+
+.inspect-inline summary {
+	padding: 0.35rem 0.6rem;
+	cursor: pointer;
+	color: var(--muted);
+	list-style: none;
+	font-size: 0.8rem;
+}
+
+.inspect-inline summary::-webkit-details-marker {
+	display: none;
+}
+
+.inspect-inline summary:hover {
+	color: var(--accent);
+}
+
+.inspect-inline .debug-block {
+	padding: 0.5rem 0.6rem;
+	border-top: 1px solid var(--border);
+	background: var(--bg);
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 180px;
+	overflow: auto;
+	font-size: 0.75rem;
+	line-height: 1.5;
+}
+
+.inspect-inline .debug-block+.debug-block {
+	border-top: 1px solid var(--border);
+}
+
+.inspect-inline .debug-label {
+	font-size: 0.7rem;
+	color: var(--muted);
+	margin-bottom: 0.15rem;
+}
+
+@keyframes pulse {
+
+	0%,
+	100% {
+		opacity: 1;
+	}
+
+	50% {
+		opacity: 0.4;
+	}
+}

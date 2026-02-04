@@ -1,0 +1,407 @@
+// Elements
+const configPanel = document.getElementById("configPanel");
+const gamePanel = document.getElementById("gamePanel");
+const logEl = document.getElementById("log");
+const startBtn = document.getElementById("startBtn");
+const backBtn = document.getElementById("backBtn");
+const statusEl = document.getElementById("status");
+const roundsInput = document.getElementById("roundsInput");
+const playerList = document.getElementById("playerList");
+const addPlayerBtn = document.getElementById("addPlayerBtn");
+const playerCountEl = document.getElementById("playerCount");
+
+// Provider capabilities (fetched from server)
+let providerInfo = {
+	openai: { displayName: "GPT", supportsStateful: true },
+	anthropic: { displayName: "Claude", supportsStateful: false },
+	google: { displayName: "Gemini", supportsStateful: true },
+};
+
+// Player types (built dynamically from provider info)
+function getPlayerTypes() {
+	return [
+		{ value: "openai", label: `🤖 ${providerInfo.openai?.displayName || "GPT"} (OpenAI)` },
+		{ value: "anthropic", label: `🤖 ${providerInfo.anthropic?.displayName || "Claude"} (Anthropic)` },
+		{ value: "google", label: `🤖 ${providerInfo.google?.displayName || "Gemini"} (Google)` },
+		{ value: "human", label: "👤 Human" },
+	];
+}
+
+// Default players: one of each AI provider with memory mode
+let players = [
+	{ type: "openai", mode: "memory" },
+	{ type: "anthropic", mode: "memory" },
+	{ type: "google", mode: "memory" },
+];
+
+// Fetch provider capabilities from server
+async function loadProviderInfo() {
+	try {
+		const res = await fetch("/api/providers");
+		if (res.ok) {
+			providerInfo = await res.json();
+			renderPlayers(); // Re-render with updated info
+		}
+	} catch (e) {
+		console.warn("Failed to load provider info, using defaults", e);
+	}
+}
+
+// Check if a provider type supports stateful mode
+function supportsStateful(type) {
+	return providerInfo[type]?.supportsStateful ?? false;
+}
+
+function renderPlayers() {
+	playerList.innerHTML = "";
+	players.forEach((player, index) => {
+		const slot = document.createElement("div");
+		slot.className = "player-slot";
+
+		const num = document.createElement("span");
+		num.className = "player-num";
+		num.textContent = (index + 1) + ".";
+
+		// Type selector
+		const typeSelect = document.createElement("select");
+		typeSelect.className = "type-select";
+		typeSelect.dataset.index = index;
+		getPlayerTypes().forEach(pt => {
+			const opt = document.createElement("option");
+			opt.value = pt.value;
+			opt.textContent = pt.label;
+			if (pt.value === player.type) opt.selected = true;
+			typeSelect.appendChild(opt);
+		});
+		typeSelect.addEventListener("change", (e) => {
+			players[index].type = e.target.value;
+			// Reset mode to memory if switching to a type that doesn't support stateful
+			if (!supportsStateful(e.target.value)) {
+				players[index].mode = "memory";
+			}
+			renderPlayers();
+		});
+
+		// Mode selector (only for AI players)
+		const modeSelect = document.createElement("select");
+		modeSelect.className = "mode-select";
+		const isAI = player.type !== "human";
+		const canStateful = supportsStateful(player.type);
+
+		const memoryOpt = document.createElement("option");
+		memoryOpt.value = "memory";
+		memoryOpt.textContent = "Memory";
+		if (player.mode === "memory") memoryOpt.selected = true;
+		modeSelect.appendChild(memoryOpt);
+
+		const statefulOpt = document.createElement("option");
+		statefulOpt.value = "stateful";
+		statefulOpt.textContent = "Stateful";
+		if (player.mode === "stateful") statefulOpt.selected = true;
+		statefulOpt.disabled = !canStateful;
+		modeSelect.appendChild(statefulOpt);
+
+		modeSelect.disabled = !isAI;
+		modeSelect.title = !isAI ? "N/A for humans" : (!canStateful ? "Stateful mode not supported by this provider" : "Agent conversation mode");
+		modeSelect.addEventListener("change", (e) => {
+			players[index].mode = e.target.value;
+		});
+
+		const removeBtn = document.createElement("button");
+		removeBtn.type = "button";
+		removeBtn.className = "remove-btn";
+		removeBtn.textContent = "×";
+		removeBtn.title = "Remove player";
+		removeBtn.addEventListener("click", () => {
+			if (players.length > 2) {
+				players.splice(index, 1);
+				renderPlayers();
+			} else {
+				alert("Minimum 2 players required.");
+			}
+		});
+
+		slot.appendChild(num);
+		slot.appendChild(typeSelect);
+		slot.appendChild(modeSelect);
+		slot.appendChild(removeBtn);
+		playerList.appendChild(slot);
+	});
+
+	playerCountEl.textContent = players.length + " player" + (players.length !== 1 ? "s" : "");
+}
+
+addPlayerBtn.addEventListener("click", () => {
+	if (players.length >= 8) {
+		alert("Maximum 8 players.");
+		return;
+	}
+	// Cycle through AI providers for new players
+	const aiTypes = ["openai", "anthropic", "google"];
+	const aiCount = players.filter(p => p.type !== "human").length;
+	const nextType = aiTypes[aiCount % aiTypes.length];
+	players.push({ type: nextType, mode: "memory" });
+	renderPlayers();
+});
+
+// Initialize player list
+renderPlayers();
+loadProviderInfo(); // Fetch actual provider capabilities from server
+
+// Show/hide panels
+function showConfig() {
+	configPanel.classList.remove("hidden");
+	gamePanel.classList.remove("active");
+	backBtn.style.display = "none";
+	statusEl.textContent = "Ready";
+	statusEl.classList.remove("live");
+}
+
+function showGame() {
+	configPanel.classList.add("hidden");
+	gamePanel.classList.add("active");
+	backBtn.style.display = "inline-block";
+}
+
+backBtn.addEventListener("click", showConfig);
+
+// Log section handling
+let currentSection = null;
+let currentBody = null;
+
+function sectionTitleFor(line) {
+	const roundMatch = line.match(/\[Round (\d+)\]/);
+	if (roundMatch) return "Round " + roundMatch[1];
+	if (line.includes("VOTING PHASE")) return "Voting";
+	if (line.includes("VERDICT")) return "Verdict";
+	if (line.includes("attempts a final guess")) return "Spy's guess";
+	if (line.includes("ACTUAL LOCATION")) return "Final score";
+	return null;
+}
+
+function startSection(title, firstLine) {
+	const details = document.createElement("details");
+	details.className = "log-section";
+	details.open = true;
+	const summary = document.createElement("summary");
+	summary.textContent = title;
+	const body = document.createElement("div");
+	body.className = "section-body";
+	if (firstLine) body.appendChild(document.createTextNode(firstLine + "\n"));
+	details.appendChild(summary);
+	details.appendChild(body);
+	logEl.appendChild(details);
+	currentSection = details;
+	currentBody = body;
+}
+
+function isNearBottom(el) {
+	return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+}
+function maybeScrollToBottom() {
+	if (isNearBottom(logEl)) logEl.scrollTop = logEl.scrollHeight;
+}
+
+function appendLine(line) {
+	if (!currentBody) startSection("Intro", line);
+	else currentBody.appendChild(document.createTextNode(line + "\n"));
+	maybeScrollToBottom();
+}
+
+function appendDebugEntry(entry) {
+	if (!currentBody) startSection("Intro", null);
+	const phase = entry.phase.charAt(0).toUpperCase() + entry.phase.slice(1);
+	const providerLabel = entry.provider === "openai" ? "OpenAI" : entry.provider === "anthropic" ? "Anthropic" : entry.provider === "google" ? "Google" : entry.provider || "";
+
+	if (entry.kind === "sent") {
+		const details = document.createElement("details");
+		details.className = "inspect-inline";
+		details.setAttribute("data-prompt-id", entry.id);
+		const summary = document.createElement("summary");
+		summary.textContent = "📋 " + phase + " (" + entry.agentName + " via " + providerLabel + ") — prompt & response";
+		details.appendChild(summary);
+
+		const promptBlock = document.createElement("div");
+		promptBlock.className = "debug-block";
+		const promptLabel = document.createElement("div");
+		promptLabel.className = "debug-label";
+		promptLabel.textContent = "Prompt (messages sent)";
+		promptBlock.appendChild(promptLabel);
+		const promptPre = document.createElement("pre");
+		promptPre.textContent = (entry.messages || []).map(m => "[" + m.role + "]\n" + m.content).join("\n\n");
+		promptBlock.appendChild(promptPre);
+		details.appendChild(promptBlock);
+
+		const responseBlock = document.createElement("div");
+		responseBlock.className = "debug-block";
+		responseBlock.setAttribute("data-response-block", "true");
+		const responseLabel = document.createElement("div");
+		responseLabel.className = "debug-label";
+		responseLabel.textContent = "Response";
+		responseBlock.appendChild(responseLabel);
+		const responsePre = document.createElement("pre");
+		responsePre.className = "response-content";
+		responsePre.innerHTML = '<span style="color:var(--muted);animation:pulse 1.5s ease-in-out infinite;">⏳ Waiting for response...</span>';
+		responseBlock.appendChild(responsePre);
+		details.appendChild(responseBlock);
+
+		currentBody.appendChild(details);
+	} else {
+		const panel = document.querySelector('[data-prompt-id="' + entry.id + '"]');
+		if (panel) {
+			const responsePre = panel.querySelector('.response-content');
+			if (responsePre) responsePre.textContent = entry.response || "(empty)";
+		}
+	}
+	maybeScrollToBottom();
+}
+
+function handleLine(line) {
+	const title = sectionTitleFor(line);
+	if (title) startSection(title, line);
+	else appendLine(line);
+}
+
+function appendAgentCreated(entry) {
+	if (!currentBody) startSection("Intro", null);
+	const providerLabel = entry.provider === "openai" ? "OpenAI" : entry.provider === "anthropic" ? "Anthropic" : entry.provider === "google" ? "Google" : entry.provider;
+	const details = document.createElement("details");
+	details.className = "inspect-inline";
+	const summary = document.createElement("summary");
+	summary.textContent = "🤖 Agent Created: " + entry.agentName + " (" + providerLabel + ", " + entry.mode + " mode)";
+	details.appendChild(summary);
+
+	const block = document.createElement("div");
+	block.className = "debug-block";
+	const label = document.createElement("div");
+	label.className = "debug-label";
+	label.textContent = "System Prompt";
+	block.appendChild(label);
+	const pre = document.createElement("pre");
+	pre.textContent = entry.systemPrompt;
+	block.appendChild(pre);
+	details.appendChild(block);
+	currentBody.appendChild(details);
+	maybeScrollToBottom();
+}
+
+function appendGameInfo(info) {
+	if (!currentBody) startSection("Intro", null);
+	const details = document.createElement("details");
+	details.className = "inspect-inline";
+	const summary = document.createElement("summary");
+	summary.textContent = "🎮 Game Setup — location, roles, spy (spoilers!)";
+	details.appendChild(summary);
+
+	const block = document.createElement("div");
+	block.className = "debug-block";
+	const pre = document.createElement("pre");
+
+	let text = "📍 LOCATION: " + info.location + "\n\n";
+	text += "👥 PLAYERS:\n";
+	info.players.forEach(p => {
+		const marker = p.isSpy ? "🕵️ SPY" : p.role;
+		text += "  • " + p.name + ": " + marker + "\n";
+	});
+	text += "\n📋 ROLES AT THIS LOCATION:\n  " + info.roles.join(", ") + "\n";
+	text += "\n🗺️ ALL POSSIBLE LOCATIONS:\n  " + info.allLocations.join(", ") + "\n";
+	text += "\n⚙️ CONFIG:\n";
+	text += "  • Players: " + info.players.length + "\n";
+	text += "  • Rounds: " + info.config.rounds;
+	if (info.config.playerSlots) {
+		text += "\n  • Slots: " + info.config.playerSlots.map(s =>
+			s.type === "human" ? "human" : s.type + ":" + s.mode
+		).join(", ");
+	}
+
+	pre.textContent = text;
+	block.appendChild(pre);
+	details.appendChild(block);
+	currentBody.appendChild(details);
+	maybeScrollToBottom();
+}
+
+// SSE connection
+const es = new EventSource("/api/stream");
+es.onopen = () => {
+	if (gamePanel.classList.contains("active")) {
+		statusEl.textContent = "Connected";
+	}
+};
+es.addEventListener("log", (e) => {
+	try {
+		const { line } = JSON.parse(e.data);
+		if (line) handleLine(line);
+	} catch (_) { }
+});
+es.addEventListener("prompt", (e) => {
+	try {
+		appendDebugEntry(JSON.parse(e.data));
+	} catch (_) { }
+});
+es.addEventListener("gameinfo", (e) => {
+	try {
+		appendGameInfo(JSON.parse(e.data));
+	} catch (_) { }
+});
+es.addEventListener("agentcreated", (e) => {
+	try {
+		appendAgentCreated(JSON.parse(e.data));
+	} catch (_) { }
+});
+es.onerror = () => {
+	if (gamePanel.classList.contains("active")) {
+		statusEl.textContent = "Reconnecting…";
+		statusEl.classList.remove("live");
+	}
+};
+
+// Start game
+startBtn.addEventListener("click", async () => {
+	const aiPlayers = players.filter(p => p.type !== "human");
+	const humanPlayers = players.filter(p => p.type === "human");
+
+	if (players.length < 2) {
+		alert("Need at least 2 players.");
+		return;
+	}
+	if (humanPlayers.length > 1) {
+		alert("Only one human player is supported.");
+		return;
+	}
+	if (aiPlayers.length === 0) {
+		alert("Need at least one AI player.");
+		return;
+	}
+
+	startBtn.disabled = true;
+	statusEl.textContent = "Starting…";
+	statusEl.classList.add("live");
+	currentSection = null;
+	currentBody = null;
+	logEl.innerHTML = "";
+	showGame();
+
+	try {
+		const rounds = parseInt(roundsInput.value) || 9;
+		// Encode players as "type:mode" pairs (human has no mode)
+		const playersParam = players.map(p =>
+			p.type === "human" ? "human" : `${p.type}:${p.mode}`
+		).join(",");
+
+		const url = "/api/start?" + new URLSearchParams({
+			rounds: rounds.toString(),
+			players: playersParam,
+		});
+
+		const r = await fetch(url, { method: "POST" });
+		if (!r.ok) throw new Error(await r.text());
+		statusEl.textContent = "Game running — watch below";
+	} catch (err) {
+		statusEl.textContent = "Error: " + (err instanceof Error ? err.message : String(err));
+		logEl.innerHTML = "";
+		logEl.appendChild(document.createTextNode("[Request failed: " + (err instanceof Error ? err.message : String(err)) + "]"));
+	} finally {
+		startBtn.disabled = false;
+	}
+});
