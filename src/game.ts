@@ -3,8 +3,9 @@ import { stdin as input, stdout as output } from "node:process";
 import { LOCATIONS, allLocationsList } from "./data";
 import { Agent, type PromptEntry, type AgentCreatedEntry } from "./agent";
 import { AIController, HumanController, PlayerController } from "./controllers";
-import { GameConfig, Player, PlayerId, PlayerSecret, Turn } from "./types";
+import { GameConfig, Player, PlayerId, PlayerSecret, PlayerSlotConfig, Turn } from "./types";
 import { parseField, buildPlayerSystemPrompt, secretToBrief } from "./prompts";
+import { DEFAULT_PROVIDER_ROTATION, getProviderDisplayName, type ProviderType } from "./providers";
 
 /** ---------- small utilities ---------- */
 
@@ -135,15 +136,41 @@ export class SpyfallGame {
     }
 
     private async setupGame(config: GameConfig): Promise<GameSetup> {
+        // Convert legacy config to playerSlots if needed
+        const slots: PlayerSlotConfig[] = config.playerSlots ?? this.legacyConfigToSlots(config);
+        
         const pack = pickRandom(LOCATIONS);
-        const spyIndex = Math.floor(Math.random() * config.numPlayers);
-        const roles = shuffle(pack.roles).slice(0, config.numPlayers - 1);
-        const agentMode = config.agentMode ?? "memory";
+        const numPlayers = slots.length;
+        const spyIndex = Math.floor(Math.random() * numPlayers);
+        const roles = shuffle(pack.roles).slice(0, numPlayers - 1);
 
+        // Count occurrences of each provider to handle duplicate names
+        const providerCounts: Record<string, number> = {};
+        const providerInstanceNum: Record<string, number> = {};
+        for (const slot of slots) {
+            if (slot.type !== "human") {
+                providerCounts[slot.type] = (providerCounts[slot.type] || 0) + 1;
+            }
+        }
+
+        // Build player list from slots
         const players: Player[] = [];
-        for (let i = 0; i < config.numPlayers; i++) {
-            const isHuman = config.includeHuman && i === 0;
-            const name = isHuman ? "You" : `Agent${i}`;
+        for (let i = 0; i < numPlayers; i++) {
+            const slot = slots[i];
+            const isHuman = slot.type === "human";
+            let name: string;
+            
+            if (isHuman) {
+                name = "You";
+            } else {
+                const baseName = getProviderDisplayName(slot.type);
+                providerInstanceNum[slot.type] = (providerInstanceNum[slot.type] || 0) + 1;
+                // Add suffix only if there are multiple of this provider
+                name = providerCounts[slot.type] > 1 
+                    ? `${baseName}-${providerInstanceNum[slot.type]}`
+                    : baseName;
+            }
+            
             const secret: PlayerSecret = (i === spyIndex)
                 ? { kind: "SPY" }
                 : { kind: "CIVILIAN", location: pack.location, role: roles.pop() || "Visitor" };
@@ -152,14 +179,20 @@ export class SpyfallGame {
 
         const controllers = new Map<PlayerId, PlayerController>();
         const agents: Agent[] = [];
-        for (const p of players) {
+        
+        for (let i = 0; i < players.length; i++) {
+            const p = players[i];
+            const slot = slots[i];
+            
             if (p.isHuman) {
                 controllers.set(p.id, new HumanController(this.rl!));
             } else {
+                const aiSlot = slot as { type: ProviderType; mode: "memory" | "stateful" };
                 const agent = new Agent({
                     name: p.name,
                     systemPrompt: buildPlayerSystemPrompt(p.name, p.secret),
-                    mode: agentMode,
+                    provider: aiSlot.type,
+                    mode: aiSlot.mode,
                     onPrompt: this.onPrompt,
                     onAgentCreated: this.onAgentCreated,
                 });
@@ -172,6 +205,29 @@ export class SpyfallGame {
         await Promise.all(agents.map(a => a.ready));
 
         return { pack, players, controllers, agents };
+    }
+
+    /** Convert legacy config format to playerSlots */
+    private legacyConfigToSlots(config: GameConfig): PlayerSlotConfig[] {
+        const numPlayers = config.numPlayers ?? 3;
+        const includeHuman = config.includeHuman ?? false;
+        const agentMode = config.agentMode ?? "memory";
+        const providers = config.providers ?? DEFAULT_PROVIDER_ROTATION;
+        
+        const slots: PlayerSlotConfig[] = [];
+        let aiIndex = 0;
+        
+        for (let i = 0; i < numPlayers; i++) {
+            if (includeHuman && i === 0) {
+                slots.push({ type: "human" });
+            } else {
+                const provider = providers[aiIndex % providers.length];
+                slots.push({ type: provider, mode: agentMode });
+                aiIndex++;
+            }
+        }
+        
+        return slots;
     }
 
     private revealHumanIdentity(players: Player[]): void {

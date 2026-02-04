@@ -1,3 +1,5 @@
+import { ProviderType, AgentMode } from "./providers";
+
 export type PlayerId = string;
 
 export type PlayerSecret =
@@ -18,10 +20,18 @@ export type Turn = {
     answer: string;
 };
 
+/** Configuration for a single player slot */
+export type PlayerSlotConfig = 
+    | { type: "human" }
+    | { type: ProviderType; mode: AgentMode };
+
 export type GameConfig = {
-    numPlayers: number; // includes human if enabled
-    includeHuman: boolean;
     rounds: number; // number of Q/A turns (not "full cycles")
-    /** Agent mode: "memory" sends full chat history each time; "thread" uses OpenAI Assistants API. Default: "memory". */
-    agentMode?: "memory" | "thread";
+    /** Player configurations in order. If not provided, uses legacy config. */
+    playerSlots?: PlayerSlotConfig[];
+    // Legacy config (used if playerSlots not provided)
+    numPlayers?: number;
+    includeHuman?: boolean;
+    agentMode?: AgentMode;
+    providers?: ProviderType[];
 };

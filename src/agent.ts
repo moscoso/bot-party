@@ -1,8 +1,11 @@
-import { openai, MODEL, type AgentMode } from "./openai";
+import { AIProvider, ProviderType, ChatMessage, AgentMode, createProvider } from "./providers";
 
-type Msg = { role: "system" | "user" | "assistant"; content: string };
+type Msg = ChatMessage;
 
 export type PromptType = "ask a question" | "answer a question" | "vote" | "guess the location" | "react";
+
+// Re-export AgentMode from providers for convenience
+export type { AgentMode } from "./providers";
 
 export type PromptEntry = {
     /** Unique ID to correlate sent/received events */
@@ -11,6 +14,8 @@ export type PromptEntry = {
     kind: "sent" | "received";
     phase: PromptType;
     agentName: string;
+    /** Provider used (e.g., "openai", "anthropic", "google") */
+    provider: ProviderType;
     /** Messages sent (in "sent") or empty (in "received"). */
     messages: Msg[];
     /** Empty in "sent", populated in "received". */
@@ -19,6 +24,7 @@ export type PromptEntry = {
 
 export type AgentCreatedEntry = {
     agentName: string;
+    provider: ProviderType;
     mode: AgentMode;
     systemPrompt: string;
 };
@@ -26,7 +32,11 @@ export type AgentCreatedEntry = {
 export type AgentOptions = {
     name: string;
     systemPrompt: string;
-    /** "memory" = Chat Completions with full history; "thread" = Assistants API with server-side thread. Default: "memory". */
+    /** AI provider to use. Default: "openai" */
+    provider?: ProviderType;
+    /** Optional model override for the provider */
+    model?: string;
+    /** "memory" = client-side history; "stateful" = server-side history. Default: "memory". */
     mode?: AgentMode;
     onPrompt?: (entry: PromptEntry) => void;
     onAgentCreated?: (entry: AgentCreatedEntry) => void;
@@ -39,18 +49,17 @@ function nextPromptId(): string {
 
 export class Agent {
     public readonly name: string;
+    public readonly providerType: ProviderType;
+    public readonly displayName: string;
+    
     private readonly mode: AgentMode;
     private readonly systemPrompt: string;
+    private readonly provider: AIProvider;
     private onPrompt?: (entry: PromptEntry) => void;
     private onAgentCreated?: (entry: AgentCreatedEntry) => void;
 
-    // Memory mode state
+    // Memory mode state (client-side history)
     private memory: Msg[] = [];
-
-    // Thread mode state
-    private assistantId?: string;
-    private threadId?: string;
-    private threadReady?: Promise<void>;
 
     /** Resolves when the agent is fully initialized (awaitable before using). */
     public readonly ready: Promise<void>;
@@ -58,42 +67,48 @@ export class Agent {
     constructor(opts: AgentOptions) {
         this.name = opts.name;
         this.systemPrompt = opts.systemPrompt;
-        this.mode = opts.mode ?? "memory";
+        this.providerType = opts.provider ?? "openai";
         this.onPrompt = opts.onPrompt;
         this.onAgentCreated = opts.onAgentCreated;
 
+        // Create the provider
+        this.provider = createProvider({ type: this.providerType, model: opts.model });
+        this.displayName = this.provider.displayName;
+
+        // Determine mode - fall back to memory if provider doesn't support stateful
+        const requestedMode = opts.mode ?? "memory";
+        if (requestedMode === "stateful" && !this.provider.supportsStateful) {
+            console.warn(`Stateful mode not supported by ${this.providerType}. Falling back to memory mode.`);
+            this.mode = "memory";
+        } else {
+            this.mode = requestedMode;
+        }
+
+        // Initialize based on mode
         if (this.mode === "memory") {
             this.memory.push({ role: "system", content: this.systemPrompt });
             this.ready = Promise.resolve();
         } else {
-            // Initialize thread mode asynchronously
-            this.threadReady = this.initThread();
-            this.ready = this.threadReady;
+            // Stateful mode - provider manages history
+            this.ready = this.provider.init(this.systemPrompt);
         }
-    }
-
-    private async initThread(): Promise<void> {
-        const assistant = await openai.beta.assistants.create({
-            name: this.name,
-            instructions: this.systemPrompt,
-            model: MODEL,
-        });
-        this.assistantId = assistant.id;
-
-        const thread = await openai.beta.threads.create();
-        this.threadId = thread.id;
     }
 
     /** Emit the agent created event. Call this after the agent is ready and when you want it logged. */
     emitCreated(): void {
-        this.onAgentCreated?.({ agentName: this.name, mode: this.mode, systemPrompt: this.systemPrompt });
+        this.onAgentCreated?.({ 
+            agentName: this.name, 
+            provider: this.providerType,
+            mode: this.mode, 
+            systemPrompt: this.systemPrompt 
+        });
     }
 
     async say(userContent: string, phase: PromptType = "ask a question"): Promise<string> {
         if (this.mode === "memory") {
             return this.sayWithMemory(userContent, phase);
         } else {
-            return this.sayWithThread(userContent, phase);
+            return this.sayStateful(userContent, phase);
         }
     }
 
@@ -103,23 +118,32 @@ export class Agent {
         const id = nextPromptId();
 
         // Fire "sent" before API call
-        this.onPrompt?.({ id, kind: "sent", phase, agentName: this.name, messages: messagesSent, response: "" });
-
-        const resp = await openai.chat.completions.create({
-            model: MODEL,
-            messages: this.memory,
+        this.onPrompt?.({ 
+            id, kind: "sent", phase, 
+            agentName: this.name, 
+            provider: this.providerType,
+            messages: messagesSent, 
+            response: "" 
         });
 
-        const text = resp.choices[0]?.message?.content?.trim() || "(no response)";
+        const text = await this.provider.chat(this.memory);
         this.memory.push({ role: "assistant", content: text });
 
         // Fire "received" after response
-        this.onPrompt?.({ id, kind: "received", phase, agentName: this.name, messages: [], response: text });
+        this.onPrompt?.({ 
+            id, 
+            kind: "received", 
+            phase, 
+            agentName: this.name, 
+            provider: this.providerType,
+            messages: [], 
+            response: text 
+        });
         return text;
     }
 
-    private async sayWithThread(userContent: string, phase: PromptType): Promise<string> {
-        await this.threadReady;
+    private async sayStateful(userContent: string, phase: PromptType): Promise<string> {
+        await this.ready;
         const id = nextPromptId();
 
         // For inspection: only show user message (system prompt was logged on agent creation)
@@ -128,45 +152,43 @@ export class Agent {
         ];
 
         // Fire "sent" before API call
-        this.onPrompt?.({ id, kind: "sent", phase, agentName: this.name, messages: messagesForInspect, response: "" });
-
-        // Add user message to thread
-        await openai.beta.threads.messages.create(this.threadId!, {
-            role: "user",
-            content: userContent,
+        this.onPrompt?.({ 
+            id, kind: "sent", phase, 
+            agentName: this.name, 
+            provider: this.providerType,
+            messages: messagesForInspect, 
+            response: "" 
         });
 
-        // Run the assistant
-        const run = await openai.beta.threads.runs.createAndPoll(this.threadId!, {
-            assistant_id: this.assistantId!,
-        });
+        try {
+            const text = await this.provider.chatStateful(userContent);
 
-        if (run.status !== "completed") {
-            const errMsg = `Run failed with status: ${run.status}`;
-            this.onPrompt?.({ id, kind: "received", phase, agentName: this.name, messages: [], response: errMsg });
-            return errMsg;
+            // Fire "received" after response
+            this.onPrompt?.({ 
+                id, kind: "received", phase, 
+                agentName: this.name, 
+                provider: this.providerType,
+                messages: [], 
+                response: text 
+            });
+            return text;
+        } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            this.onPrompt?.({ 
+                id, 
+                kind: "received", 
+                phase, 
+                agentName: this.name, 
+                provider: this.providerType,
+                messages: [], 
+                response: `Error: ${errMsg}` 
+            });
+            return `Error: ${errMsg}`;
         }
-
-        // Get latest assistant message
-        const messages = await openai.beta.threads.messages.list(this.threadId!, { limit: 1, order: "desc" });
-        const lastMsg = messages.data[0];
-        const textBlock = lastMsg?.content?.find((c) => c.type === "text");
-        const text = (textBlock?.type === "text" ? textBlock.text?.value?.trim() : null) || "(no response)";
-
-        // Fire "received" after response
-        this.onPrompt?.({ id, kind: "received", phase, agentName: this.name, messages: [], response: text });
-        return text;
     }
 
-    /** Cleanup: delete assistant and thread (call when done with this agent). */
+    /** Cleanup any provider resources (threads, sessions, etc.). */
     async cleanup(): Promise<void> {
-        if (this.mode === "thread" && this.assistantId) {
-            try {
-                await openai.beta.threads.delete(this.threadId!);
-                await openai.beta.assistants.delete(this.assistantId);
-            } catch {
-                // Ignore cleanup errors
-            }
-        }
+        await this.provider.cleanup();
     }
 }

@@ -4,7 +4,8 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PromptEntry, AgentCreatedEntry } from "./agent";
 import { SpyfallGame, type GameInfoEntry } from "./game";
-import type { GameConfig } from "./types";
+import type { GameConfig, PlayerSlotConfig } from "./types";
+import { PROVIDER_TYPES, type ProviderType, getProviderCapabilities } from "./providers";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -77,13 +78,40 @@ function handleStream(res: ServerResponse): void {
 
 async function handleStart(res: ServerResponse, queryString: string): Promise<void> {
     const params = new URLSearchParams(queryString);
-    const agentMode = params.get("mode") === "thread" ? "thread" : "memory";
+    
+    const rounds = Math.min(30, Math.max(1, parseInt(params.get("rounds") || "9") || 9));
+    
+    // Parse players param: "openai:memory,anthropic:memory,human,google:stateful"
+    const playersParam = params.get("players");
+    let playerSlots: PlayerSlotConfig[] | undefined;
+    
+    if (playersParam) {
+        playerSlots = [];
+        const slots = playersParam.split(",").map(s => s.trim());
+        for (const slot of slots) {
+            if (slot === "human") {
+                playerSlots.push({ type: "human" });
+            } else {
+                const [provider, mode] = slot.split(":");
+                if (PROVIDER_TYPES.includes(provider as ProviderType)) {
+                    // Map "thread" (legacy) to "stateful"
+                    const agentMode = (mode === "stateful" || mode === "thread") ? "stateful" : "memory";
+                    playerSlots.push({
+                        type: provider as ProviderType,
+                        mode: agentMode,
+                    });
+                }
+            }
+        }
+        // Ensure at least 2 players
+        if (playerSlots.length < 2) {
+            playerSlots = undefined;
+        }
+    }
 
     const config: GameConfig = {
-        numPlayers: 3,
-        includeHuman: false,
-        rounds: 9,
-        agentMode,
+        rounds,
+        playerSlots,
     };
 
     const game = new SpyfallGame();
@@ -92,8 +120,9 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
     game.onGameInfo = broadcastGameInfo;
     game.onAgentCreated = broadcastAgentCreated;
 
+    const numPlayers = playerSlots?.length ?? 3;
     res.writeHead(202, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, message: `Game started (mode: ${agentMode}). Watch the stream.` }));
+    res.end(JSON.stringify({ ok: true, message: `Game started with ${numPlayers} players. Watch the stream.` }));
 
     try {
         await game.run(config);
@@ -121,6 +150,11 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
 
     if (path === "/api/stream" && req.method === "GET") {
         handleStream(res);
+        return;
+    }
+    if (path === "/api/providers" && req.method === "GET") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(getProviderCapabilities()));
         return;
     }
     if (path === "/api/start" && req.method === "POST") {
