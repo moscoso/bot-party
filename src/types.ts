@@ -20,6 +20,24 @@ export type Turn = {
     answer: string;
 };
 
+/** Actions available once all players have answered at least once */
+export type TurnAction = "question" | "guess" | "vote";
+
+/** Result of choosing an action for a turn */
+export type ActionChoice = {
+    action: TurnAction;
+    thought?: string;
+};
+
+/** Result of an early game termination */
+export type EarlyEndResult = {
+    ended: true;
+    winner: "spy" | "civilians";
+    reason: string;
+} | {
+    ended: false;
+};
+
 /** Configuration for a single player slot */
 export type PlayerSlotConfig = 
     | { type: "human" }
@@ -27,6 +45,8 @@ export type PlayerSlotConfig =
 
 export type GameConfig = {
     rounds: number; // number of Q/A turns (not "full cycles")
+    /** Allow players to call early votes (once per game). Default: true */
+    allowEarlyVote?: boolean;
     /** Player configurations in order. If not provided, uses legacy config. */
     playerSlots?: PlayerSlotConfig[];
     // Legacy config (used if playerSlots not provided)

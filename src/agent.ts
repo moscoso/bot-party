@@ -2,7 +2,7 @@ import { AIProvider, ProviderType, ChatMessage, AgentMode, createProvider } from
 
 type Msg = ChatMessage;
 
-export type PromptType = "ask a question" | "answer a question" | "vote" | "guess the location" | "react";
+export type PromptType = "ask a question" | "answer a question" | "vote" | "guess the location" | "react" | "choose action";
 
 // Re-export AgentMode from providers for convenience
 export type { AgentMode } from "./providers";

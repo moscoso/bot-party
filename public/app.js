@@ -6,6 +6,7 @@ const startBtn = document.getElementById("startBtn");
 const backBtn = document.getElementById("backBtn");
 const statusEl = document.getElementById("status");
 const roundsInput = document.getElementById("roundsInput");
+const allowEarlyVoteInput = document.getElementById("allowEarlyVote");
 const playerList = document.getElementById("playerList");
 const addPlayerBtn = document.getElementById("addPlayerBtn");
 const playerCountEl = document.getElementById("playerCount");
@@ -384,6 +385,7 @@ startBtn.addEventListener("click", async () => {
 
 	try {
 		const rounds = parseInt(roundsInput.value) || 9;
+		const allowEarlyVote = allowEarlyVoteInput?.checked ?? true;
 		// Encode players as "type:mode" pairs (human has no mode)
 		const playersParam = players.map(p =>
 			p.type === "human" ? "human" : `${p.type}:${p.mode}`
@@ -392,6 +394,7 @@ startBtn.addEventListener("click", async () => {
 		const url = "/api/start?" + new URLSearchParams({
 			rounds: rounds.toString(),
 			players: playersParam,
+			allowEarlyVote: allowEarlyVote.toString(),
 		});
 
 		const r = await fetch(url, { method: "POST" });

@@ -3,8 +3,8 @@ import { stdin as input, stdout as output } from "node:process";
 import { LOCATIONS, allLocationsList } from "./data";
 import { Agent, type PromptEntry, type AgentCreatedEntry } from "./agent";
 import { AIController, HumanController, PlayerController } from "./controllers";
-import { GameConfig, Player, PlayerId, PlayerSecret, PlayerSlotConfig, Turn } from "./types";
-import { parseField, buildPlayerSystemPrompt, secretToBrief } from "./prompts";
+import { EarlyEndResult, GameConfig, Player, PlayerId, PlayerSecret, PlayerSlotConfig, Turn } from "./types";
+import { buildPlayerSystemPrompt, secretToBrief } from "./prompts";
 import { DEFAULT_PROVIDER_ROTATION, getProviderDisplayName, type ProviderType } from "./providers";
 
 /** ---------- small utilities ---------- */
@@ -26,40 +26,77 @@ function shuffle<T>(arr: T[]): T[] {
     return a;
 }
 
+/**
+ * Extracts a specific value from a block of text based on a "KEY: VALUE" format.
+ * 
+ * This utility uses a case-insensitive {@link RegExp} to 
+ * locate the key name and capture all text following the colon on the same line.
+ *
+ * @param key - The name of the key to search for (e.g., "TARGET", "GUESS", "VOTE").
+ * @param text - the raw string to search within
+ * @returns the trimmed string value of the field if found; otherwise, an empty string.
+ * * @example
+ * const aiResponse = "I've decided.\nTARGET: Agent1\nQUESTION: What is the weather?";
+ * const target = parseField("TARGET", aiResponse); // Returns "Agent1"
+ */
+export function parseField(key: string, text: string): string {
+    /** 
+     * Create a regex like /KEY:\s*(.*)/i
+     * - i: case-insensitive
+     * - \s*: ignores optional spaces after the colon
+     * - (.*): captures the rest of the text on that line
+     */
+    const regex = new RegExp(`${key}:\\s*(.*)`, "i");
+    const match = text.match(regex);
+    return match ? match[1].trim() : "";
+}
+
 function normalizeName(s: string): string {
     return s.trim().toLowerCase();
 }
 
-/** * Resolve a target by name.
- * Enforces: 
+/**
+ * Resolve a target by name (name-based matching).
+ * Enforces:
  * 1. Target is not the asker (selfId)
  * 2. Target is not the person who just asked (lastAskerId)
+ *
+ * Matching: exact normalized name first, then substring (target contains name or name contains target).
+ * If multiple substring matches, prefer the longest name (most specific). Avoids "Gemini" matching wrong player.
  */
-function resolveOtherPlayer(
+function resolveTargetPlayer(
     players: Player[],
     targetName: string,
     selfId: PlayerId,
     lastAskerId?: PlayerId
 ): Player {
-    const normalized = normalizeName(targetName);
-    const candidate = players.find(p => normalizeName(p.name) === normalized);
-
-    // Logic: Illegal if target is self OR target is the person who just asked you
+    const target = normalizeName(targetName);
     const isIllegal = (p: Player) => p.id === selfId || (lastAskerId && p.id === lastAskerId);
 
-    // If the chosen candidate is valid, use them
-    if (candidate && !isIllegal(candidate)) {
-        return candidate;
+    // 1. Exact match (normalized)
+    const exact = players.find(p => normalizeName(p.name) === target && !isIllegal(p));
+    if (exact) return exact;
+
+    // 2. Substring match: target contains player name or player name contains target (e.g. "Gemini" -> "Gemini", or "Ask Gemini" -> "Gemini")
+    const candidates = players
+        .filter(p => !isIllegal(p))
+        .filter(p => {
+            const name = normalizeName(p.name);
+            return name && target && (target.includes(name) || name.includes(target));
+        });
+
+    if (candidates.length === 1) return candidates[0];
+    if (candidates.length > 1) {
+        // Prefer longest name (most specific match, e.g. "Gemini" over "Gemini 2" when target is "Gemini" - exact already failed so we have overlap)
+        candidates.sort((a, b) => normalizeName(b.name).length - normalizeName(a.name).length);
+        return candidates[0];
     }
 
-    // Fallback: Filter all players to find those who are legal targets
+    // 3. Fallback: random valid target
     const validOptions = players.filter(p => !isIllegal(p));
-
-    // Safety check: if everyone is illegal (rare), just pick someone not self
     if (validOptions.length === 0) {
         return safePickRandom(players.filter(p => p.id !== selfId), players[0]);
     }
-
     return safePickRandom(validOptions, validOptions[0]);
 }
 
@@ -76,6 +113,11 @@ type TallyResult = {
     accusedName: string | null;
     isTie: boolean;
     spy: Player;
+};
+
+type RoundsResult = {
+    turns: Turn[];
+    earlyEnd: EarlyEndResult;
 };
 
 export type GameReporter = (line: string) => void;
@@ -117,15 +159,26 @@ export class SpyfallGame {
             const setup = await this.setupGame(config);
             const { pack, players, controllers } = setup;
             agents = setup.agents;
+            const spy = players.find(p => p.secret.kind === "SPY")!;
+            
             this.revealHumanIdentity(players);
             this.emitGameInfo(pack, players, config);
             agents.forEach(a => a.emitCreated());
-            const turns = await this.runQuestionRounds(config.rounds, players, controllers);
-            const votes = await this.runVotingPhase(players, controllers, turns);
-            const { accusedName, isTie, spy } = this.tallyVotes(votes, players);
-            this.logVerdict(accusedName, isTie, spy);
-            const spyGuessedRight = await this.runSpyGuessIfEligible(accusedName, isTie, spy, pack, controllers, turns);
-            this.printFinalScore(pack, accusedName, spy, spyGuessedRight);
+            
+            const allowEarlyVote = config.allowEarlyVote ?? true;
+            const { turns, earlyEnd } = await this.runQuestionRounds(config.rounds, players, controllers, pack, allowEarlyVote);
+            
+            // Check for early game termination (from spy guess or early vote)
+            if (earlyEnd.ended) {
+                this.printEarlyEndResult(pack, spy, earlyEnd);
+            } else {
+                // Normal game flow: final voting phase
+                const votes = await this.runVotingPhase(players, controllers, turns);
+                const { accusedName, isTie } = this.tallyVotes(votes, players);
+                this.logVerdict(accusedName, isTie, spy);
+                const spyGuessedRight = await this.runSpyGuessIfEligible(accusedName, isTie, spy, pack, controllers, turns);
+                this.printFinalScore(pack, accusedName, spy, spyGuessedRight);
+            }
         } finally {
             // Cleanup agents (deletes assistants/threads in thread mode)
             await Promise.all(agents.map(a => a.cleanup()));
@@ -257,9 +310,14 @@ export class SpyfallGame {
     private async runQuestionRounds(
         numRounds: number,
         players: Player[],
-        controllers: Map<PlayerId, PlayerController>
-    ): Promise<Turn[]> {
+        controllers: Map<PlayerId, PlayerController>,
+        pack: (typeof LOCATIONS)[number],
+        allowEarlyVote: boolean
+    ): Promise<RoundsResult> {
         const turns: Turn[] = [];
+        const playersWhoAnswered = new Set<PlayerId>();
+        const usedVote = new Set<PlayerId>();
+        let actionsUnlockAnnounced = false;
         let roundCount = 0;
         let currentAsker = pickRandom(players);
         let lastAsker: Player | null = null;
@@ -271,10 +329,51 @@ export class SpyfallGame {
             this.log(`\n[Round ${roundCount}]`);
 
             const askerCtl = controllers.get(currentAsker.id)!;
+            const actionsUnlocked = playersWhoAnswered.size >= players.length;
+            
+            // If actions are unlocked, let the player choose what to do
+            if (actionsUnlocked) {
+                // canAccuse only if early accusations are enabled AND player hasn't used their accusation
+                const canAccuse = allowEarlyVote && !usedVote.has(currentAsker.id);
+                const choice = await askerCtl.chooseAction(players, turns, currentAsker, canAccuse);
+                
+                if (choice.thought) {
+                    this.log(`💭 ${currentAsker.name}'s Decision: "${choice.thought}"`);
+                }
+                
+                // Handle SPY GUESS action
+                if (choice.action === "guess") {
+                    if (currentAsker.secret.kind !== "SPY") {
+                        this.log(`${currentAsker.name} tried to guess but isn't the spy! Defaulting to question.`);
+                    } else {
+                        const earlyEnd = await this.handleEarlySpyGuess(currentAsker, pack, controllers, turns);
+                        if (earlyEnd.ended) {
+                            return { turns, earlyEnd };
+                        }
+                        // If spy guessed wrong, game ends (spy loses)
+                    }
+                }
+                
+                // Handle ACCUSE action (vote action type = accusation)
+                if (choice.action === "vote" && canAccuse) {
+                    usedVote.add(currentAsker.id);
+                    const earlyEnd = await this.handleAccusation(currentAsker, players, controllers, turns, pack);
+                    if (earlyEnd.ended) {
+                        return { turns, earlyEnd };
+                    }
+                    // If accusation failed (no majority), game continues
+                    this.log(`Accusation failed. Game continues...`);
+                    lastAsker = currentAsker;
+                    currentAsker = pickRandom(players.filter(p => p.id !== currentAsker.id));
+                    continue;
+                }
+            }
+            
+            // Default action: Ask a question
             const rawAsk = await askerCtl.ask(players, currentAsker);
             if (rawAsk.thought) this.log(`💭 ${currentAsker.name}'s Strategy: "${rawAsk.thought}"`);
 
-            const target = resolveOtherPlayer(players, rawAsk.targetName, currentAsker.id, lastAsker?.id);
+            const target = resolveTargetPlayer(players, rawAsk.targetName, currentAsker.id, lastAsker?.id);
             this.log(`${currentAsker.name} ➔ ${target.name}`);
             this.log(`Q: ${rawAsk.question}`);
 
@@ -289,6 +388,16 @@ export class SpyfallGame {
             if (targetThought) this.log(`💭 ${target.name}'s Logic: "${targetThought}"`);
             this.log(`A: ${publicAnswer}`);
 
+            // Track that this player has answered
+            playersWhoAnswered.add(target.id);
+            
+            // Announce when actions unlock (once per game)
+            if (!actionsUnlockAnnounced && playersWhoAnswered.size >= players.length) {
+                actionsUnlockAnnounced = true;
+                const accuseMsg = allowEarlyVote ? " and ACCUSE (once per game)" : "";
+                this.log(`\n🔓 All players have answered! New actions unlocked: GUESS (spy)${accuseMsg}`);
+            }
+
             // Reactions to the answer (from players not involved)
             const answerReactors = players.filter(p => p.id !== currentAsker.id && p.id !== target.id && !p.isHuman);
             await this.collectReactions(answerReactors, controllers, "answer", target.name, publicAnswer);
@@ -298,7 +407,141 @@ export class SpyfallGame {
             lastAsker = currentAsker;
             currentAsker = target;
         }
-        return turns;
+        return { turns, earlyEnd: { ended: false } };
+    }
+    
+    private async handleEarlySpyGuess(
+        spy: Player,
+        pack: (typeof LOCATIONS)[number],
+        controllers: Map<PlayerId, PlayerController>,
+        turns: Turn[]
+    ): Promise<EarlyEndResult> {
+        this.log(`\n🎲 ${spy.name} is taking a risk and guessing the location!`);
+        
+        const guessRaw = await controllers.get(spy.id)!.guessLocation(turns, spy, false) ?? "";
+        const guess = parseField("GUESS", guessRaw);
+        const reason = parseField("REASON", guessRaw);
+        
+        this.log(`${spy.name}: "I believe we are at the ${guess.toUpperCase()}!"`);
+        if (reason) this.log(`Reason: "${reason}"`);
+        
+        const correct = normalizeName(guess) === normalizeName(pack.location);
+        
+        if (correct) {
+            return { ended: true, winner: "spy", reason: "Spy correctly guessed the location!" };
+        } else {
+            return { ended: true, winner: "civilians", reason: "Spy guessed wrong!" };
+        }
+    }
+    
+    private async handleAccusation(
+        accuser: Player,
+        players: Player[],
+        controllers: Map<PlayerId, PlayerController>,
+        turns: Turn[],
+        pack: (typeof LOCATIONS)[number]
+    ): Promise<EarlyEndResult> {
+        const spy = players.find(p => p.secret.kind === "SPY")!;
+        const accuserCtl = controllers.get(accuser.id)!;
+        
+        // Step 1: Accuser picks who to accuse
+        const accusation = await accuserCtl.accuse(players, turns, accuser);
+        const accusedName = accusation.targetName;
+        const accused = players.find(p => normalizeName(p.name) === normalizeName(accusedName));
+        
+        if (!accused || accused.id === accuser.id) {
+            this.log(`${accuser.name} tried to make an invalid accusation. Skipping.`);
+            return { ended: false };
+        }
+        
+        this.log(`\n🚨 ${accuser.name} accuses ${accused.name} of being the spy!`);
+        if (accusation.reason) this.log(`"${accusation.reason}"`);
+        
+        // Step 2: Accused defends themselves
+        const accusedCtl = controllers.get(accused.id)!;
+        const defenseResult = await accusedCtl.defendAgainstAccusation(
+            accuser.name, 
+            accusation.reason || "No reason given", 
+            turns, 
+            accused
+        );
+        
+        this.log(`\n🛡️ ${accused.name} defends themselves:`);
+        if (defenseResult.thought) this.log(`💭 ${accused.name}'s Strategy: "${defenseResult.thought}"`);
+        this.log(`"${defenseResult.defense}"`);
+        
+        // Step 3: Everyone else votes yes/no (skip the accused - they obviously vote no)
+        const voters = players.filter(p => p.id !== accuser.id && p.id !== accused.id);
+        let yesVotes = 1; // Accuser implicitly votes yes
+        let noVotes = 1;  // Accused implicitly votes no
+        
+        this.log(`\n⚖️ Voting on the accusation...`);
+        this.log(`${accuser.name}: YES (accuser)`);
+        this.log(`${accused.name}: NO (accused)`);
+        
+        for (const voter of voters) {
+            const voterCtl = controllers.get(voter.id)!;
+            const result = await voterCtl.voteOnAccusation(accuser.name, accused.name, defenseResult.defense, turns, voter);
+            
+            if (result.vote === "yes") {
+                yesVotes++;
+            } else {
+                noVotes++;
+            }
+            
+            this.log(`${voter.name}: ${result.vote.toUpperCase()} — "${result.reason}"`);
+        }
+        
+        // Step 4: Check majority
+        const majority = Math.floor(players.length / 2) + 1;
+        this.log(`\n📊 Results: ${yesVotes} YES, ${noVotes} NO (need ${majority} for majority)`);
+        
+        if (yesVotes >= majority) {
+            // Majority voted yes - accusation succeeds
+            this.log(`✅ The group convicts ${accused.name}!`);
+            this.log(`🕵️ REVEAL: The Spy was ${spy.name}!`);
+            
+            if (accused.id === spy.id) {
+                // Correct! Spy caught! But spy gets one last chance to guess
+                this.log(`\n${spy.name} was caught! But gets one last chance to guess the location...`);
+                const guessRaw = await controllers.get(spy.id)!.guessLocation(turns, spy, true) ?? "";
+                const guess = parseField("GUESS", guessRaw);
+                const reason = parseField("REASON", guessRaw);
+                
+                this.log(`${spy.name}: "I believe we are at the ${guess.toUpperCase()}!"`);
+                if (reason) this.log(`Reason: "${reason}"`);
+                
+                const correct = normalizeName(guess) === normalizeName(pack.location);
+                if (correct) {
+                    return { ended: true, winner: "spy", reason: "Spy was caught but correctly guessed the location!" };
+                } else {
+                    return { ended: true, winner: "civilians", reason: "Spy was caught and couldn't guess the location!" };
+                }
+            } else {
+                // Wrong person convicted - spy wins!
+                return { ended: true, winner: "spy", reason: `Civilians convicted ${accused.name} but the spy was ${spy.name}!` };
+            }
+        } else {
+            // No majority - accusation fails, game continues
+            this.log(`❌ Not enough votes. ${accused.name} is NOT convicted.`);
+            return { ended: false };
+        }
+    }
+    
+    private printEarlyEndResult(
+        pack: (typeof LOCATIONS)[number],
+        spy: Player,
+        result: EarlyEndResult & { ended: true }
+    ): void {
+        this.log("\n" + "=".repeat(30));
+        this.log(`📍 ACTUAL LOCATION: ${pack.location}`);
+        this.log(`🕵️ THE SPY WAS: ${spy.name}`);
+        if (result.winner === "spy") {
+            this.log(`🏆 RESULT: SPY WINS! (${result.reason})`);
+        } else {
+            this.log(`🏆 RESULT: CIVILIANS WIN! (${result.reason})`);
+        }
+        this.log("=".repeat(30) + "\n");
     }
 
     private async collectReactions(
@@ -376,7 +619,7 @@ export class SpyfallGame {
         if (accusedName !== spy.name && !isTie) return false;
 
         this.log(`\n${spy.name} attempts a final guess...`);
-        const guessRaw = await controllers.get(spy.id)!.guessLocation(turns, spy) ?? "";
+        const guessRaw = await controllers.get(spy.id)!.guessLocation(turns, spy, true) ?? "";
         const guess = parseField("GUESS", guessRaw);
         const reason = parseField("REASON", guessRaw);
 

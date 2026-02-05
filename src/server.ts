@@ -109,8 +109,12 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
         }
     }
 
+    // Parse allowEarlyVote option (default: true)
+    const allowEarlyVote = params.get("allowEarlyVote") !== "false";
+
     const config: GameConfig = {
         rounds,
+        allowEarlyVote,
         playerSlots,
     };
 

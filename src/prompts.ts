@@ -67,13 +67,13 @@ export function buildAskerInstruction(players: Player[], self: Player): string {
         - Or ask a question that will completely throw off the spy from the location`;
 
     return `
-        Players you can ask: ${names}
+        Players you can ask (use the EXACT name from this list): ${names}
         
         ${strategy}
 
         Return exactly in this format:
             THOUGHT: <your private reasoning - who seems suspicious and why, or what info you need>
-            TARGET: <player name>
+            TARGET: <exact player name from the list above - copy it exactly, e.g. ${names.split(",").map(n => n.trim())[0] || "PlayerName"}>
             QUESTION: <your clever question that everyone will hear>
     `;
 }
@@ -110,7 +110,9 @@ export function buildSpyGuessPrompt(turns: Turn[]): string {
         .map(t => `${t.askerId} -> ${t.targetId}\nQ: ${t.question}\nA: ${t.answer}`)
         .join("\n\n");
     return `
-        You have been caught!
+        You have been caught! The group convicted you as the spy.
+        You get ONE last chance: guess the location correctly and you still win!
+
         Return exactly in this format:
             THOUGHT: <analyze the transcript and identify the specific clues that led you to your guess>
             GUESS: <location name>
@@ -166,27 +168,182 @@ export function buildReactionPrompt(
     `;
 }
 
-/**
- * Extracts a specific value from a block of text based on a "KEY: VALUE" format.
- * 
- * This utility uses a case-insensitive {@link RegExp} to 
- * locate the key name and capture all text following the colon on the same line.
- *
- * @param key - The name of the key to search for (e.g., "TARGET", "GUESS", "VOTE").
- * @param text - the raw string to search within
- * @returns the trimmed string value of the field if found; otherwise, an empty string.
- * * @example
- * const aiResponse = "I've decided.\nTARGET: Agent1\nQUESTION: What is the weather?";
- * const target = parseField("TARGET", aiResponse); // Returns "Agent1"
- */
-export function parseField(key: string, text: string): string {
-    /** 
-     * Create a regex like /KEY:\s*(.*)/i
-     * - i: case-insensitive
-     * - \s*: ignores optional spaces after the colon
-     * - (.*): captures the rest of the text on that line
-     */
-    const regex = new RegExp(`${key}:\\s*(.*)`, "i");
-    const match = text.match(regex);
-    return match ? match[1].trim() : "";
+export function buildActionChoicePrompt(
+    players: Player[],
+    turns: Turn[],
+    self: Player,
+    canAccuse: boolean
+): string {
+    const isSpy = self.secret.kind === "SPY";
+    const recap = turns.slice(-5) // Last 5 turns for context
+        .map(t => `${t.askerId} -> ${t.targetId}: Q: ${t.question} A: ${t.answer}`)
+        .join("\n");
+
+    const options = isSpy
+        ? `Your options:
+        - QUESTION: Ask someone a question (safe, gather more info)
+        - GUESS: Guess the location NOW (risky - if wrong, you lose immediately!)${canAccuse ? `
+        - ACCUSE: Accuse someone of being the spy (others vote yes/no - use to frame someone!)` : ""}`
+        : `Your options:
+        - QUESTION: Ask someone a question (gather more info, test someone)${canAccuse ? `
+        - ACCUSE: Accuse someone of being the spy! Others vote yes/no. If majority agrees and you're right, civilians win. If wrong, spy wins!` : ""}`;
+
+    const strategy = isSpy
+        ? `🕵️ SPY DECISION:
+        - If you're confident about the location, GUESS could win you the game
+        - If you're unsure, keep asking questions to gather clues
+        - ACCUSE can frame an innocent - risky but could cause chaos!`
+        : `📍 CIVILIAN DECISION:
+        - If you're confident who the spy is, ACCUSE them! Majority must agree.
+        - If wrong, the spy wins immediately - be sure before accusing!
+        - Keep asking questions if you need more info`;
+
+    return `
+        It's your turn. New actions are now available!
+
+        Recent conversation:
+        ${recap || "(no turns yet)"}
+
+        ${options}
+
+        ${strategy}
+
+        Return exactly in this format:
+            THOUGHT: <your reasoning for what to do>
+            ACTION: <question OR guess OR accuse>
+    `;
+}
+
+export function buildEarlySpyGuessPrompt(turns: Turn[]): string {
+    const recap = turns
+        .map(t => `${t.askerId} -> ${t.targetId}\nQ: ${t.question}\nA: ${t.answer}`)
+        .join("\n\n");
+    return `
+        🎲 You're taking a risk and guessing the location NOW!
+        
+        If you're RIGHT, you WIN immediately!
+        If you're WRONG, you LOSE immediately!
+
+        Analyze the clues carefully.
+
+        Return exactly in this format:
+            THOUGHT: <analyze the clues - what location fits best?>
+            GUESS: <location name>
+            REASON: <one sentence explanation>
+
+        Transcript:
+        ${recap}
+    `;
+}
+
+export function buildAccusationPrompt(players: Player[], turns: Turn[], self: Player): string {
+    const names = players.map(p => p.name).filter(n => n !== self.name).join(", ");
+    const recap = turns.slice(-5)
+        .map(t => `${t.askerId} -> ${t.targetId}: Q: ${t.question} A: ${t.answer}`)
+        .join("\n");
+
+    return `
+        🚨 You're making an ACCUSATION! This is serious!
+
+        You will accuse someone of being the spy.
+        Everyone else will vote YES or NO on your accusation.
+        - If majority votes YES and you're RIGHT → Civilians win!
+        - If majority votes YES and you're WRONG → Spy wins!
+        - If majority votes NO → Accusation fails, game continues.
+
+        Players you can accuse: ${names}
+
+        Recent conversation:
+        ${recap || "(no turns yet)"}
+
+        Return exactly in this format:
+            THOUGHT: <why you think this person is the spy>
+            TARGET: <player name to accuse>
+            REASON: <one dramatic sentence for the accusation - this is public!>
+    `;
+}
+
+export function buildDefensePrompt(
+    accuserName: string,
+    accusation: string,
+    turns: Turn[],
+    self: Player
+): string {
+    const isSpy = self.secret.kind === "SPY";
+    const recap = turns.slice(-5)
+        .map(t => `${t.askerId} -> ${t.targetId}: Q: ${t.question} A: ${t.answer}`)
+        .join("\n");
+
+    const strategy = isSpy
+        ? `🕵️ SPY STRATEGY:
+        - Stay calm! Don't act guilty.
+        - Point out how your answers were consistent with the location
+        - Deflect suspicion onto others if possible
+        - Act offended but not TOO defensive`
+        : `📍 CIVILIAN STRATEGY:
+        - Remind everyone of your helpful, specific answers
+        - Point out how you clearly knew the location
+        - Stay calm and logical - panic looks suspicious
+        - Maybe redirect attention to who REALLY seems suspicious`;
+
+    return `
+        🚨 YOU'VE BEEN ACCUSED!
+
+        ${accuserName} just accused you of being the spy!
+        Their reason: "${accusation}"
+
+        This is your chance to defend yourself before everyone votes!
+        Make your case - your fate depends on it!
+
+        ${strategy}
+
+        Recent conversation:
+        ${recap || "(no turns yet)"}
+
+        Return exactly in this format:
+            THOUGHT: <your private strategy for this defense>
+            DEFENSE: <your public defense speech - be dramatic and persuasive!>
+    `;
+}
+
+export function buildAccusationVotePrompt(
+    accuserName: string,
+    accusedName: string,
+    defense: string,
+    turns: Turn[],
+    self: Player
+): string {
+    const isSpy = self.secret.kind === "SPY";
+    const recap = turns.slice(-5)
+        .map(t => `${t.askerId} -> ${t.targetId}: Q: ${t.question} A: ${t.answer}`)
+        .join("\n");
+
+    const strategy = isSpy
+        ? `🕵️ SPY STRATEGY: 
+        - Vote YES on innocent players to eliminate them!
+        - Vote NO if they're accusing YOU
+        - Create doubt and confusion`
+        : `📍 CIVILIAN STRATEGY:
+        - Vote YES only if you're confident ${accusedName} is the spy
+        - If wrong, the spy wins immediately!
+        - Vote NO if unsure - better to keep playing than lose`;
+
+    return `
+        ⚖️ ${accuserName} accuses ${accusedName} of being the spy!
+
+        ${accusedName}'s defense: "${defense}"
+
+        Do you agree with the accusation? Vote YES to convict or NO to reject.
+        Majority rules - if most vote YES, ${accusedName} is convicted.
+
+        ${strategy}
+
+        Recent conversation:
+        ${recap || "(no turns yet)"}
+
+        Return exactly in this format:
+            THOUGHT: <your reasoning>
+            VOTE: <YES or NO>
+            REASON: <one sentence explanation - this is public!>
+    `;
 }

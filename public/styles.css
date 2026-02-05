@@ -214,6 +214,22 @@ h1 {
 	border-color: var(--accent);
 }
 
+/* Checkbox Setting */
+.checkbox-setting {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-size: 0.85rem;
+	color: var(--text);
+	cursor: pointer;
+}
+.checkbox-setting input[type="checkbox"] {
+	width: 1rem;
+	height: 1rem;
+	accent-color: var(--accent);
+	cursor: pointer;
+}
+
 /* Start Button */
 .start-btn {
 	width: 100%;
