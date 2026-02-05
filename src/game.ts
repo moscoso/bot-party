@@ -6,6 +6,7 @@ import { AIController, HumanController, PlayerController } from "./controllers";
 import { EarlyEndResult, GameConfig, Player, PlayerId, PlayerSecret, PlayerSlotConfig, Turn } from "./types";
 import { buildPlayerSystemPrompt, secretToBrief } from "./prompts";
 import { DEFAULT_PROVIDER_ROTATION, getProviderDisplayName, type ProviderType } from "./providers";
+import { parseField } from "./utils/parseField";
 
 /** ---------- small utilities ---------- */
 
@@ -24,31 +25,6 @@ function shuffle<T>(arr: T[]): T[] {
         [a[i], a[j]] = [a[j], a[i]];
     }
     return a;
-}
-
-/**
- * Extracts a specific value from a block of text based on a "KEY: VALUE" format.
- * 
- * This utility uses a case-insensitive {@link RegExp} to 
- * locate the key name and capture all text following the colon on the same line.
- *
- * @param key - The name of the key to search for (e.g., "TARGET", "GUESS", "VOTE").
- * @param text - the raw string to search within
- * @returns the trimmed string value of the field if found; otherwise, an empty string.
- * * @example
- * const aiResponse = "I've decided.\nTARGET: Agent1\nQUESTION: What is the weather?";
- * const target = parseField("TARGET", aiResponse); // Returns "Agent1"
- */
-export function parseField(key: string, text: string): string {
-    /** 
-     * Create a regex like /KEY:\s*(.*)/i
-     * - i: case-insensitive
-     * - \s*: ignores optional spaces after the colon
-     * - (.*): captures the rest of the text on that line
-     */
-    const regex = new RegExp(`${key}:\\s*(.*)`, "i");
-    const match = text.match(regex);
-    return match ? match[1].trim() : "";
 }
 
 function normalizeName(s: string): string {

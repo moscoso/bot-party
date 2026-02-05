@@ -1,5 +1,5 @@
 import { Agent } from "../agent";
-import { parseField } from "../game";
+import { parseField } from "../utils/parseField";
 import { 
     buildAccusationPrompt, 
     buildAccusationVotePrompt, 
