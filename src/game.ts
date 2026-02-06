@@ -10,7 +10,6 @@ import {
     runSpyGuessIfEligible,
 } from "./phases";
 import {
-    revealHumanIdentity,
     emitGameInfo,
     printEarlyEndResult,
     logVerdict,
@@ -59,7 +58,6 @@ export class SpyfallGame {
             agents = setupAgents;
             const spy = players.find(p => p.secret.kind === "SPY")!;
 
-            revealHumanIdentity(players, this.log.bind(this));
             emitGameInfo(pack, players, config, this.onGameInfo);
             agents.forEach(a => a.emitCreated());
 

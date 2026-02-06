@@ -1,14 +1,8 @@
-import { secretToBrief } from "../prompts";
 import { LOCATIONS } from "../data";
 import type { Player } from "../types";
 import type { GameConfig } from "../types";
 import type { EarlyEndResult } from "../types";
 import type { LocationPack } from "../data";
-
-export function revealHumanIdentity(players: Player[], log: (msg: string) => void): void {
-    const human = players.find(p => p.isHuman);
-    if (human) log(`\n=== YOUR IDENTITY ===\n${secretToBrief(human.secret)}\n=====================\n`);
-}
 
 export function emitGameInfo(
     pack: LocationPack,

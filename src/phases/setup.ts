@@ -2,7 +2,7 @@ import { LOCATIONS } from "../data";
 import { Agent } from "../agent";
 import { AIController, HumanController, PlayerController } from "../controllers";
 import { GameConfig, Player, PlayerId, PlayerSecret, PlayerSlotConfig } from "../types";
-import { buildPlayerSystemPrompt } from "../prompts";
+import { buildPlayerSystemPrompt, secretToBrief } from "../prompts";
 import { DEFAULT_PROVIDER_ROTATION, getProviderDisplayName, type ProviderType } from "../providers";
 import { pickRandom, shuffle } from "../utils/random";
 import type { GameSetup, SetupDeps } from "./types";
@@ -76,6 +76,7 @@ export async function setupGame(config: GameConfig, deps: SetupDeps): Promise<Ga
 
         if (p.isHuman) {
             controllers.set(p.id, new HumanController(deps.rl!));
+            console.log(`\n=== YOUR IDENTITY ===\n${secretToBrief(p.secret)}\n=====================\n`);
         } else {
             const aiSlot = slot as { type: ProviderType; mode: "memory" | "stateful" };
             const agent = new Agent({
