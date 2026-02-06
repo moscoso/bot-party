@@ -272,13 +272,13 @@ function displayAnalyticsSummary(summary) {
 	document.getElementById("totalGames").textContent = summary.totalGames || 0;
 	
 	if (summary.totalGames > 0) {
-		const avgMinutes = Math.round(summary.averageGameDuration / 60);
+		const avgMinutes = Math.round(summary.avgGameDuration / 1000 / 60);
 		document.getElementById("avgDuration").textContent = `${avgMinutes}m`;
-		document.getElementById("avgTurns").textContent = summary.averageTurns?.toFixed(1) || "-";
+		document.getElementById("avgTurns").textContent = summary.avgTurnsPerGame?.toFixed(1) || "-";
 		
 		// Win rates
-		const spyWins = summary.winsByRole?.spy || 0;
-		const civilianWins = summary.winsByRole?.civilian || 0;
+		const spyWins = summary.spyWins || 0;
+		const civilianWins = summary.civilianWins || 0;
 		const total = spyWins + civilianWins;
 		
 		if (total > 0) {
@@ -298,15 +298,15 @@ function displayAnalyticsSummary(summary) {
 		const providers = Object.entries(summary.providerStats || {}).sort((a, b) => b[1].totalGames - a[1].totalGames);
 		
 		providers.forEach(([provider, stats]) => {
-			const winRate = stats.totalGames > 0 
-				? ((stats.wins / stats.totalGames) * 100).toFixed(1) 
+			const winRate = stats.gamesPlayed > 0 
+				? ((stats.wins / stats.gamesPlayed) * 100).toFixed(1) 
 				: 0;
 			
 			const row = document.createElement("div");
 			row.className = "stat-row";
 			row.innerHTML = `
 				<span class="stat-label">${provider}</span>
-				<span class="stat-value">${stats.wins}/${stats.totalGames} (${winRate}%)</span>
+				<span class="stat-value">${stats.wins}/${stats.gamesPlayed} (${winRate}%)</span>
 			`;
 			providerStatsEl.appendChild(row);
 		});
@@ -315,16 +315,15 @@ function displayAnalyticsSummary(summary) {
 		const locationStatsEl = document.getElementById("locationStats");
 		locationStatsEl.innerHTML = "";
 		
-		const locations = Object.entries(summary.locationStats || {})
-			.sort((a, b) => b[1].timesPlayed - a[1].timesPlayed)
+		const locations = (summary.locationStats || [])
 			.slice(0, 5);
 		
-		locations.forEach(([location, stats]) => {
+		locations.forEach((stats) => {
 			const row = document.createElement("div");
 			row.className = "stat-row";
 			row.innerHTML = `
-				<span class="stat-label">${location}</span>
-				<span class="stat-value">${stats.timesPlayed} games</span>
+				<span class="stat-label">${stats.location}</span>
+				<span class="stat-value">${stats.gamesPlayed} games</span>
 			`;
 			locationStatsEl.appendChild(row);
 		});
@@ -359,11 +358,11 @@ async function loadRecentGames() {
 		
 		// Show last 10 games
 		games.slice(0, 10).forEach(game => {
-			const date = new Date(game.startTime);
+			const date = new Date(game.timestamp);
 			const dateStr = date.toLocaleDateString() + " " + date.toLocaleTimeString();
 			
 			const winner = game.winner === "spy" ? "🕵️ Spy" : game.winner === "civilians" ? "👥 Civilians" : "Draw";
-			const duration = Math.round(game.duration / 60);
+			const duration = Math.round(game.duration / 1000 / 60);
 			
 			const item = document.createElement("div");
 			item.className = "game-item";
@@ -376,7 +375,7 @@ async function loadRecentGames() {
 					<span>📍 ${game.location}</span>
 					<span>🏆 ${winner}</span>
 					<span>⏱️ ${duration}m</span>
-					<span>🔄 ${game.turns} turns</span>
+					<span>🔄 ${game.turns?.length || 0} turns</span>
 				</div>
 			`;
 			
