@@ -170,11 +170,11 @@ bot-party/
 
 ## Documentation
 
-- **[API Reference](./API.md)** - HTTP endpoints and response formats
-- **[Testing Guide](./TESTING.md)** - How to write and run tests
-- **[Analytics System](./ANALYTICS.md)** - Analytics data models and usage
-- **[Location Management](./LOCATIONS.md)** - Custom location pack format
-- **[Changelog](./CHANGELOG.md)** - Recent changes and improvements
+- **[API Reference](./docs/API.md)** - HTTP endpoints and response formats
+- **[Testing Guide](./docs/TESTING.md)** - How to write and run tests
+- **[Analytics System](./docs/ANALYTICS.md)** - Analytics data models and usage
+- **[Location Management](./docs/LOCATIONS.md)** - Custom location pack format
+- **[Changelog](./docs/CHANGELOG.md)** - Recent changes and improvements
 
 ## Development
 
