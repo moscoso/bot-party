@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { PromptEntry, AgentCreatedEntry } from "./agent";
 import { SpyfallGame, type GameInfoEntry } from "./game";
 import type { GameConfig, PlayerSlotConfig } from "./types";
-import { PROVIDER_TYPES, type ProviderType, getProviderCapabilities } from "./providers";
+import { PROVIDER_TYPES, type ProviderType, getProviderCapabilities, getAvailableProviders, hasAPIKey } from "./providers";
 import { AnalyticsService } from "./analytics";
 import { LocationManager } from "./locations";
 
@@ -213,6 +213,26 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
     if (path === "/api/providers" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(getProviderCapabilities()));
+        return;
+    }
+    if (path === "/api/health" && req.method === "GET") {
+        const available = getAvailableProviders();
+        const providerStatus: Record<string, { configured: boolean; displayName: string }> = {};
+        
+        for (const provider of PROVIDER_TYPES) {
+            const caps = getProviderCapabilities();
+            providerStatus[provider] = {
+                configured: hasAPIKey(provider),
+                displayName: caps[provider].displayName,
+            };
+        }
+        
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+            ok: available.length > 0,
+            availableProviders: available,
+            providerStatus,
+        }));
         return;
     }
     if (path === "/api/start" && req.method === "POST") {
