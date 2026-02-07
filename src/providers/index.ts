@@ -2,6 +2,14 @@ export * from "./types";
 export { OpenAIProvider } from "./openai.provider";
 export { AnthropicProvider } from "./anthropic.provider";
 export { GoogleProvider } from "./google.provider";
+export { 
+    validateAPIKey, 
+    getAPIKey, 
+    hasAPIKey, 
+    getAvailableProviders,
+    APIKeyError,
+    ProviderAPIError 
+} from "./validation";
 
 import { AIProvider, ProviderConfig, ProviderType } from "./types";
 import { OpenAIProvider } from "./openai.provider";
