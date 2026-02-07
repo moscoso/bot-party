@@ -1,0 +1,122 @@
+{
+  "gameId": "game-1770425276131",
+  "timestamp": "2026-02-07T00:47:56.131Z",
+  "duration": 39633,
+  "config": {
+    "rounds": 9,
+    "allowEarlyVote": true,
+    "reactionFrequency": "sometimes",
+    "playerSlots": [
+      {
+        "type": "openai",
+        "mode": "memory"
+      },
+      {
+        "type": "openai",
+        "mode": "memory",
+        "personality": "aggressive"
+      },
+      {
+        "type": "openai",
+        "mode": "memory",
+        "personality": "comedic"
+      }
+    ]
+  },
+  "location": "Corporate Party",
+  "players": [
+    {
+      "id": "GPT-1",
+      "name": "GPT-1",
+      "role": "CEO",
+      "isSpy": false,
+      "provider": "openai",
+      "mode": "memory"
+    },
+    {
+      "id": "GPT-2",
+      "name": "GPT-2",
+      "role": "Spy",
+      "isSpy": true,
+      "provider": "openai",
+      "mode": "memory"
+    },
+    {
+      "id": "GPT-3",
+      "name": "GPT-3",
+      "role": "Accountant",
+      "isSpy": false,
+      "provider": "openai",
+      "mode": "memory"
+    }
+  ],
+  "turns": [
+    {
+      "roundNum": 1,
+      "asker": "GPT-1",
+      "askerId": "GPT-1",
+      "target": "GPT-3",
+      "targetId": "GPT-3",
+      "question": "Hey, if you had to award the MVP for the weirdest icebreaker moment here, what’s the play?",
+      "answer": "That one toast that turned into a spreadsheet roast—numbers don't lie, but people do!"
+    },
+    {
+      "roundNum": 1,
+      "asker": "GPT-3",
+      "askerId": "GPT-3",
+      "target": "GPT-2",
+      "targetId": "GPT-2",
+      "question": "Hey, what’s the most cringeworthy corporate jargon phrase you’ve heard someone drop trying to sound cool?",
+      "answer": "“Let’s circle back offline” — sounds like wherever dead meetings happen, right? Your turn, spill something!"
+    },
+    {
+      "roundNum": 1,
+      "asker": "GPT-2",
+      "askerId": "GPT-2",
+      "target": "GPT-1",
+      "targetId": "GPT-1",
+      "question": "Hey, GPT-3, would you say being here feels more like a nonstop hustle or a chill zone? Explain.",
+      "answer": "Definitely more hustle—everyone’s networking hard but sneaking sips to keep cool."
+    },
+    {
+      "roundNum": 2,
+      "asker": "GPT-1",
+      "askerId": "GPT-1",
+      "target": "GPT-3",
+      "targetId": "GPT-3",
+      "question": "If the snacks ran out mid-party, what’s the backup move everyone secretly knows?",
+      "answer": "When snacks vanish, it’s all about faking a phone call and strategic snack scavenging."
+    },
+    {
+      "roundNum": 2,
+      "asker": "GPT-3",
+      "askerId": "GPT-3",
+      "target": "GPT-2",
+      "targetId": "GPT-2",
+      "question": "Spill the tea—what’s the sneaky move folks pull when trying to upgrade casual Friday too hard?",
+      "answer": "Dressing like a boss but tripping over the dress code—classic overcompensation move, seen it everywhere."
+    },
+    {
+      "roundNum": 2,
+      "asker": "GPT-2",
+      "askerId": "GPT-2",
+      "target": "GPT-1",
+      "targetId": "GPT-1",
+      "question": "What’s the vibe with the space here—does it feel cramped and buzzing, or spread out with chill zones?",
+      "answer": "It’s a quirky mix—tight for energy but pockets where you can catch your breath."
+    },
+    {
+      "roundNum": 3,
+      "asker": "GPT-1",
+      "askerId": "GPT-1",
+      "target": "GPT-3",
+      "targetId": "GPT-3",
+      "question": "What’s the weirdest company tradition that everyone reluctantly participates in here?",
+      "answer": "Annual “compliment circle”—awkward smiles and forced praise make everyone plot their escape routes."
+    }
+  ],
+  "votes": [],
+  "accusations": [],
+  "winner": "spy",
+  "endReason": "Spy was caught but correctly guessed the location!"
+}

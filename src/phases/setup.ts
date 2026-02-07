@@ -5,6 +5,7 @@ import { GameConfig, Player, PlayerId, PlayerSecret, PlayerSlotConfig } from "..
 import { buildPlayerSystemPrompt, secretToBrief } from "../prompts";
 import { DEFAULT_PROVIDER_ROTATION, getProviderDisplayName, type ProviderType } from "../providers";
 import { pickRandom, shuffle } from "../utils/random";
+import { getPersonalityById } from "../personalities";
 import type { GameSetup, SetupDeps } from "./types";
 
 export function legacyConfigToSlots(config: GameConfig): PlayerSlotConfig[] {

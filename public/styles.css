@@ -65,7 +65,7 @@ h1 {
 	border-radius: 12px;
 	padding: 2rem;
 	width: 100%;
-	max-width: 500px;
+	max-width: 600px;
 }
 
 .config-card h2 {
@@ -113,6 +113,7 @@ h1 {
 	font-size: 0.75rem;
 	color: var(--muted);
 	min-width: 1.5rem;
+	flex-shrink: 0;
 }
 
 .player-slot select {
@@ -131,13 +132,14 @@ h1 {
 }
 
 .player-slot .type-select {
+	min-width: 150px;
 	flex: 1;
 }
 
 .player-slot .mode-select {
 	width: 90px;
 	font-size: 0.75rem;
-	padding: 0.35rem 0.4rem;
+	padding: 0.4rem 0.5rem;
 }
 
 .player-slot .mode-select:disabled {
@@ -148,7 +150,7 @@ h1 {
 .player-slot .personality-select {
 	width: 110px;
 	font-size: 0.75rem;
-	padding: 0.35rem 0.4rem;
+	padding: 0.4rem 0.5rem;
 }
 
 .player-slot .personality-select:disabled {
