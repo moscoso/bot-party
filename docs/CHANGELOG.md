@@ -2,7 +2,141 @@
 
 All notable changes to the Bot Party project are documented in this file.
 
-## [Unreleased]
+## [Unreleased] - Phase 4 & 5 Features
+
+### Added - February 6, 2026
+
+#### API Key Validation & Error Handling (Phase 4.1)
+
+**Provider Validation:**
+- Created `src/providers/validation.ts` with comprehensive validation utilities
+- Added `APIKeyError` class for missing API key errors with helpful messages
+- Added `ProviderAPIError` class for API call failures with context
+- Implemented `validateAPIKey()`, `getAPIKey()`, `hasAPIKey()` functions
+- Added `getAvailableProviders()` to check which providers are configured
+
+**Error Messages:**
+- API key errors now show:
+  - Provider name
+  - Required environment variable name
+  - Direct link to get API key (platform.openai.com, console.anthropic.com, etc.)
+- API call errors wrapped with provider context and suggestions
+
+**Health Check Endpoint:**
+- New `/api/health` endpoint to check provider configuration status
+- Returns list of available providers and detailed status for each
+- Shows which providers have valid API keys configured
+- Example: `curl http://localhost:3000/api/health`
+
+**Provider Integration:**
+- Updated all three providers (OpenAI, Anthropic, Google) to validate API keys on construction
+- Wrapped all API calls with error handling via `wrapProviderCall()`
+- Better error context for initialization, chat completion, and stateful operations
+
+#### Configurable Reaction Frequency (Phase 4.2)
+
+**Reaction System:**
+- Added `reactionFrequency` option to `GameConfig` type
+- Five frequency levels: `always`, `frequent` (75%), `sometimes` (50%, default), `rare` (25%), `never`
+- Updated `collectReactions()` to filter reactors based on probability
+- Passes frequency through game phases to reaction collection
+
+**Configuration:**
+- Added `reactionFrequency` query parameter to `/api/start` endpoint
+- New dropdown in UI game setup: "AI Reaction Frequency"
+- Defaults to `sometimes` for balanced gameplay
+- Helps control game length and output verbosity
+
+#### AI Personality System (Phase 5.1-3)
+
+**Personality Framework:**
+- Created `src/personalities.ts` with comprehensive personality system
+- Seven personality types with unique behavioral traits:
+  - **Neutral**: Balanced, standard gameplay (default)
+  - **Aggressive**: Direct, confrontational, quick to accuse
+  - **Quiet Observer**: Reserved, cautious, minimal responses
+  - **Paranoid**: Suspects everyone, sees conspiracies
+  - **Comedic**: Playful, humorous, entertaining
+  - **Analytical**: Logical, methodical, evidence-based
+  - **Social Butterfly**: Friendly, trusting, relationship-focused
+
+**Personality Traits:**
+- Each personality affects:
+  - Communication style
+  - Question-asking approach
+  - Answer-giving behavior
+  - Suspicion and trust patterns
+  - Decision-making style
+
+**Integration:**
+- Added `personality?: string` to `PlayerSlotConfig` for AI agents
+- Updated `buildPlayerSystemPrompt()` to accept and apply personality
+- Personalities integrated via `applyPersonalityToPrompt()` function
+- System prompts include personality traits and behavioral guidelines
+
+**UI & API:**
+- Added personality dropdown per player in game setup
+- API player format: `provider:mode:personality` (e.g., `openai:memory:aggressive`)
+- Personality optional, defaults to `neutral` if not specified
+- CSS styling for personality selector dropdown
+
+#### Enhanced Location Display (Phase 4.3)
+
+**Location Categories:**
+- Added `LOCATION_CATEGORIES` grouping locations by type:
+  - Travel & Transport (6 locations)
+  - Entertainment & Leisure (11 locations)
+  - Work & Business (6 locations)
+  - Public Services (5 locations)
+  - Special (2 locations)
+
+**Improved Formatting:**
+- Updated `allLocationsList()` to show categorized locations
+- More organized and readable in AI system prompts
+- Helps agents understand location types and context
+
+**Role Hints:**
+- Civilians now receive hints about other roles at their location
+- Shows 4 other possible roles with their role assignment
+- Example: `💡 OTHER ROLES AT Hospital: Physician, Surgeon, Patient, Intern...`
+- Helps civilians understand location context better
+- Makes role-playing more natural and informed
+
+#### Documentation
+
+**New Files:**
+- `docs/FEATURES.md` - Comprehensive guide to personalities and QoL features
+  - Personality descriptions and use cases
+  - Reaction frequency settings and recommendations
+  - Location enhancements and role hints
+  - API key validation and error handling
+  - Tips and best practices
+
+**Updated Files:**
+- `docs/API.md` - Added new parameters:
+  - `reactionFrequency` query parameter documentation
+  - Updated player format to include personality
+  - Added personality options and descriptions
+  - Documented `/api/health` endpoint
+  - Updated examples with new features
+
+### Changed
+
+**Player Configuration:**
+- Player format extended from `type:mode` to `type:mode:personality`
+- Backward compatible (personality optional)
+
+**Mode Names:**
+- Clarified `memory` (stateless, client sends history) vs `stateful` (server-side history)
+
+**Location Display:**
+- System prompts now show categorized locations instead of flat list
+
+**Error Handling:**
+- Provider initialization errors now show helpful setup instructions
+- API errors include provider name and context
+
+## Previous Releases
 
 ### Added - February 6, 2026
 

@@ -18,11 +18,15 @@ In Spyfall, players are assigned roles at a secret location. One player is the s
 ### Key Features
 
 - **Multi-Provider AI Support**: Use OpenAI GPT, Anthropic Claude, or Google Gemini
-- **Memory Modes**: Stateful (with memory) or stateless AI agents
+- **AI Personalities**: 7 distinct personality types (Aggressive, Quiet, Paranoid, Comedic, Analytical, Social, Neutral)
+- **Memory Modes**: Stateful (server-side history) or memory (client-side history) AI agents
+- **Configurable Reactions**: Control AI reaction frequency (always, frequent, sometimes, rare, never)
 - **Real-time Streaming**: Server-Sent Events (SSE) for live game updates
-- **Game Analytics**: Track performance, win rates, and statistics
-- **Location Management**: Import/export custom location packs
-- **Comprehensive Testing**: 43+ tests with Vitest
+- **Game Analytics**: Track performance, win rates, and statistics across games
+- **Location Management**: Import/export custom location packs with 30+ default locations
+- **API Key Validation**: Helpful error messages and health checks for provider configuration
+- **Enhanced Location Display**: Categorized locations and role hints for better context
+- **Comprehensive Testing**: 43+ tests with Vitest covering core functionality
 
 ## Getting Started
 
@@ -77,13 +81,34 @@ PORT=3000
 
 ### 🎮 Game Setup
 
-- **Player Configuration**: Mix AI agents and human players
-- **AI Provider Selection**: Choose between OpenAI, Anthropic, or Google
+- **Player Configuration**: Mix AI agents and human players (2-8 players)
+- **AI Provider Selection**: Choose between OpenAI GPT, Anthropic Claude, or Google Gemini
+- **AI Personalities**: Assign unique personalities to each AI agent:
+  - **Aggressive**: Direct and confrontational
+  - **Quiet Observer**: Reserved and cautious
+  - **Paranoid**: Suspects everyone
+  - **Comedic**: Playful and humorous
+  - **Analytical**: Logical and methodical
+  - **Social Butterfly**: Friendly and trusting
+  - **Neutral**: Balanced (default)
 - **Memory Modes**: 
-  - **Memory**: Agents remember previous turns (stateful)
-  - **Stateless**: Each turn is independent
-- **Custom Rounds**: Set the number of question rounds
-- **Early Voting**: Allow players to make accusations before final voting
+  - **Memory**: Client sends full history each turn
+  - **Stateful**: Server manages conversation history
+- **Reaction Frequency**: Control how often AI agents react to Q&A
+  - Always, Frequent, Sometimes (default), Rare, Never
+- **Custom Rounds**: Set the number of question rounds (1-30)
+- **Location Selection**: Choose specific locations or random
+- **Early Voting**: Allow players to make accusations during the game
+
+### 🎭 AI Personalities
+
+Each AI agent can have a distinct personality affecting their:
+- **Questioning style**: How they ask questions (aggressive vs subtle)
+- **Answering approach**: How they respond (brief vs detailed)
+- **Suspicion behavior**: How they react to others (paranoid vs trusting)
+- **Decision-making**: How they make accusations (bold vs cautious)
+
+Mix and match personalities for unique gameplay dynamics! See [FEATURES.md](docs/FEATURES.md) for detailed personality descriptions.
 
 ### 📊 Analytics Dashboard
 
@@ -92,8 +117,8 @@ Track comprehensive game statistics including:
 - **Game Metrics**: Total games, average duration, average turns
 - **Win Rates**: Spy vs civilian success rates with percentages
 - **Provider Performance**: Win rates by AI provider (GPT, Claude, Gemini)
-- **Location Stats**: Most played locations and their difficulty
-- **Recent Games**: View detailed history of recent matches
+- **Location Stats**: Most played locations and their win rates
+- **Recent Games**: View detailed history of recent matches with full game data
 
 Access analytics by clicking the **📊 Analytics** button in the header.
 

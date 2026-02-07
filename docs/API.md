@@ -15,7 +15,7 @@ http://localhost:3000
 #### Start Game
 
 ```http
-POST /api/start?rounds=9&players=openai:memory,anthropic:memory&location=Airplane
+POST /api/start?rounds=9&players=openai:memory:aggressive,anthropic:memory:quiet&location=Airplane&reactionFrequency=sometimes
 ```
 
 **Query Parameters:**
@@ -26,9 +26,11 @@ POST /api/start?rounds=9&players=openai:memory,anthropic:memory&location=Airplan
 | `players` | string | Yes | Comma-separated list of player configs |
 | `location` | string | No | Specific location name (default: random) |
 | `allowEarlyVote` | boolean | No | Allow early accusations (default: true) |
+| `reactionFrequency` | string | No | AI reaction frequency: `always`, `frequent`, `sometimes` (default), `rare`, `never` |
 
 **Player Format:**
-- AI players: `{provider}:{mode}` (e.g., `openai:memory`, `anthropic:stateless`)
+- AI players: `{provider}:{mode}:{personality}` (e.g., `openai:memory:aggressive`, `anthropic:memory:quiet`)
+  - Personality is optional, defaults to `neutral`
 - Human players: `human`
 
 **Providers:**
@@ -37,12 +39,21 @@ POST /api/start?rounds=9&players=openai:memory,anthropic:memory&location=Airplan
 - `google` - Google Gemini models
 
 **Modes:**
-- `memory` - Stateful agent (remembers previous turns)
-- `stateless` - Independent turns
+- `memory` - Stateless agent (client sends full history)
+- `stateful` - Stateful agent (server manages history)
+
+**Personalities:**
+- `neutral` - Balanced, no special traits (default)
+- `aggressive` - Direct and confrontational
+- `quiet` - Reserved and observant
+- `paranoid` - Suspects everyone
+- `comedic` - Playful and humorous
+- `analytical` - Logical and methodical
+- `social` - Friendly and trusting
 
 **Example:**
 ```bash
-curl "http://localhost:3000/api/start?rounds=5&players=openai:memory,anthropic:memory,google:stateless,human"
+curl "http://localhost:3000/api/start?rounds=5&players=openai:memory:aggressive,anthropic:memory:quiet,google:stateful:analytical,human&reactionFrequency=sometimes"
 ```
 
 **Response:**
@@ -117,6 +128,48 @@ Returns available AI providers and their capabilities.
   "anthropic": {
     "displayName": "Claude",
     "supportsStateful": false
+  },
+  "google": {
+    "displayName": "Gemini",
+    "supportsStateful": true
+  }
+}
+```
+
+#### Check Provider Health
+
+```http
+GET /api/health
+```
+
+Check which providers have valid API keys configured.
+
+**Response:**
+```json
+{
+  "ok": true,
+  "availableProviders": ["openai", "anthropic", "google"],
+  "providerStatus": {
+    "openai": {
+      "configured": true,
+      "displayName": "GPT"
+    },
+    "anthropic": {
+      "configured": true,
+      "displayName": "Claude"
+    },
+    "google": {
+      "configured": false,
+      "displayName": "Gemini"
+    }
+  }
+}
+```
+
+**Fields:**
+- `ok` - True if at least one provider is configured
+- `availableProviders` - Array of provider IDs with valid API keys
+- `providerStatus` - Detailed status for each provider
   },
   "google": {
     "displayName": "Gemini",
