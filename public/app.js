@@ -814,22 +814,26 @@ class AudioManager {
 	}
 	
 	speak(text, playerName) {
-		if (!this.enabled || !this.synth || !text) return;
-		
-		// Add to queue
-		this.audioQueue.push({ text, playerName });
-		
-		// Process queue if not already speaking
-		if (!this.speaking) {
-			this.processQueue();
+		if (!this.enabled || !this.synth || !text) {
+			return Promise.resolve(); // Return resolved promise if disabled
 		}
+		
+		return new Promise((resolve) => {
+			// Add to queue with resolve callback
+			this.audioQueue.push({ text, playerName, resolve });
+			
+			// Process queue if not already speaking
+			if (!this.speaking) {
+				this.processQueue();
+			}
+		});
 	}
 	
 	async processQueue() {
 		if (this.speaking || this.audioQueue.length === 0) return;
 		
 		this.speaking = true;
-		const { text, playerName } = this.audioQueue.shift();
+		const { text, playerName, resolve } = this.audioQueue.shift();
 		
 		const utterance = new SpeechSynthesisUtterance(text);
 		utterance.volume = this.volume;
@@ -843,7 +847,8 @@ class AudioManager {
 		
 		utterance.onend = () => {
 			this.speaking = false;
-			// Process next in queue
+			resolve(); // Resolve the promise when done
+			// Process next in queue with a small delay
 			if (this.audioQueue.length > 0) {
 				setTimeout(() => this.processQueue(), 100);
 			}
@@ -851,6 +856,7 @@ class AudioManager {
 		
 		utterance.onerror = () => {
 			this.speaking = false;
+			resolve(); // Resolve even on error to prevent hanging
 			// Continue with queue on error
 			if (this.audioQueue.length > 0) {
 				setTimeout(() => this.processQueue(), 100);
@@ -863,6 +869,10 @@ class AudioManager {
 	stop() {
 		if (this.synth) {
 			this.synth.cancel();
+			// Resolve all pending promises in the queue
+			this.audioQueue.forEach(item => {
+				if (item.resolve) item.resolve();
+			});
 			this.audioQueue = [];
 			this.speaking = false;
 		}
@@ -928,7 +938,7 @@ class GameStateManager {
 		
 		while (this.eventQueue.length > 0 && !this.paused) {
 			const event = this.eventQueue.shift();
-			visualBoardRenderer.handleEvent(event);
+			await visualBoardRenderer.handleEvent(event);
 			
 			// Delay between events based on speed
 			const delay = this.baseDelay / this.speed;
@@ -1192,16 +1202,16 @@ class VisualBoardRenderer {
 		return phase.charAt(0).toUpperCase() + phase.slice(1);
 	}
 
-	handleEvent(event) {
+	async handleEvent(event) {
 		switch (event.type) {
 			case 'turn':
 				this.updateTurn(event.asker, event.target);
 				break;
 			case 'question':
-				this.showQuestion(event.text, event.asker);
+				await this.showQuestion(event.text, event.asker);
 				break;
 			case 'answer':
-				this.showAnswer(event.text, event.target);
+				await this.showAnswer(event.text, event.target);
 				break;
 			case 'round':
 				this.updateRound(event.round);
@@ -1320,7 +1330,7 @@ class VisualBoardRenderer {
 		bubble.classList.add(direction);
 	}
 
-	showQuestion(text, asker) {
+	async showQuestion(text, asker) {
 		// Use passed asker or fallback to stored value
 		const askerPlayer = asker || this.currentAsker;
 		const askerCard = this.playerCards.get(askerPlayer?.name);
@@ -1343,18 +1353,18 @@ class VisualBoardRenderer {
 		this.dialogDisplay.appendChild(bubble);
 		this.currentBubbles.push(bubble);
 		
-		// Speak the question
-		if (this.audio && askerPlayer) {
-			this.audio.speak(text, askerPlayer.name);
-		}
-		
 		// Position after DOM insertion so we can measure
 		setTimeout(() => {
 			this.positionBubbleNearPlayer(bubble, askerCard);
 		}, 10);
+		
+		// Speak the question and wait for it to complete
+		if (this.audio && askerPlayer) {
+			await this.audio.speak(text, askerPlayer.name);
+		}
 	}
 
-	showAnswer(text, target) {
+	async showAnswer(text, target) {
 		// Use passed target or fallback to stored value
 		const targetPlayer = target || this.currentTarget;
 		const targetCard = this.playerCards.get(targetPlayer?.name);
@@ -1380,15 +1390,15 @@ class VisualBoardRenderer {
 		// Remove thinking state from target
 		targetCard.classList.remove('thinking');
 		
-		// Speak the answer
-		if (this.audio && targetPlayer) {
-			this.audio.speak(text, targetPlayer.name);
-		}
-		
 		// Position after DOM insertion so we can measure
 		setTimeout(() => {
 			this.positionBubbleNearPlayer(bubble, targetCard);
 		}, 10);
+		
+		// Speak the answer and wait for it to complete
+		if (this.audio && targetPlayer) {
+			await this.audio.speak(text, targetPlayer.name);
+		}
 	}
 
 	drawArrow(fromRect, toRect) {
