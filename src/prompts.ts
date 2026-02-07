@@ -62,6 +62,7 @@ export function buildPlayerSystemPrompt(
         `;
         return applyPersonalityToPrompt(civilianPrompt, personality);
     }
+}
 
 export function buildAskerInstruction(players: Player[], self: Player): string {
     const names = players.map(p => p.name).filter(n => n !== self.name).join(", ");
