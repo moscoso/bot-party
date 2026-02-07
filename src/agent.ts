@@ -63,6 +63,11 @@ export class Agent {
 
     /** Resolves when the agent is fully initialized (awaitable before using). */
     public readonly ready: Promise<void>;
+    
+    /** Get the agent's mode (memory or stateful) */
+    public get memoryMode(): AgentMode {
+        return this.mode;
+    }
 
     constructor(opts: AgentOptions) {
         this.name = opts.name;
