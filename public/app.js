@@ -36,11 +36,22 @@ function getPlayerTypes() {
 	];
 }
 
-// Default players: one of each AI provider with memory mode
+// Default players: one of each AI provider with memory mode and neutral personality
 let players = [
-	{ type: "openai", mode: "memory" },
-	{ type: "anthropic", mode: "memory" },
-	{ type: "google", mode: "memory" },
+	{ type: "openai", mode: "memory", personality: "neutral" },
+	{ type: "anthropic", mode: "memory", personality: "neutral" },
+	{ type: "google", mode: "memory", personality: "neutral" },
+];
+
+// Available personalities
+const personalities = [
+	{ id: "neutral", name: "Balanced", desc: "Standard, no special traits" },
+	{ id: "aggressive", name: "Aggressive", desc: "Direct and confrontational" },
+	{ id: "quiet", name: "Quiet", desc: "Reserved and observant" },
+	{ id: "paranoid", name: "Paranoid", desc: "Suspects everyone" },
+	{ id: "comedic", name: "Comedic", desc: "Playful and humorous" },
+	{ id: "analytical", name: "Analytical", desc: "Logical and methodical" },
+	{ id: "social", name: "Social", desc: "Friendly and trusting" },
 ];
 
 // Fetch provider capabilities from server
@@ -88,6 +99,12 @@ function renderPlayers() {
 			if (!supportsStateful(e.target.value)) {
 				players[index].mode = "memory";
 			}
+			// Reset personality to neutral when switching to human
+			if (e.target.value === "human") {
+				players[index].personality = undefined;
+			} else if (!players[index].personality) {
+				players[index].personality = "neutral";
+			}
 			renderPlayers();
 		});
 
@@ -116,6 +133,23 @@ function renderPlayers() {
 			players[index].mode = e.target.value;
 		});
 
+		// Personality selector (only for AI players)
+		const personalitySelect = document.createElement("select");
+		personalitySelect.className = "personality-select";
+		personalities.forEach(p => {
+			const opt = document.createElement("option");
+			opt.value = p.id;
+			opt.textContent = p.name;
+			opt.title = p.desc;
+			if (player.personality === p.id) opt.selected = true;
+			personalitySelect.appendChild(opt);
+		});
+		personalitySelect.disabled = !isAI;
+		personalitySelect.title = !isAI ? "N/A for humans" : "Agent personality";
+		personalitySelect.addEventListener("change", (e) => {
+			players[index].personality = e.target.value;
+		});
+
 		const removeBtn = document.createElement("button");
 		removeBtn.type = "button";
 		removeBtn.className = "remove-btn";
@@ -133,6 +167,7 @@ function renderPlayers() {
 		slot.appendChild(num);
 		slot.appendChild(typeSelect);
 		slot.appendChild(modeSelect);
+		slot.appendChild(personalitySelect);
 		slot.appendChild(removeBtn);
 		playerList.appendChild(slot);
 	});
@@ -149,7 +184,7 @@ addPlayerBtn.addEventListener("click", () => {
 	const aiTypes = ["openai", "anthropic", "google"];
 	const aiCount = players.filter(p => p.type !== "human").length;
 	const nextType = aiTypes[aiCount % aiTypes.length];
-	players.push({ type: nextType, mode: "memory" });
+	players.push({ type: nextType, mode: "memory", personality: "neutral" });
 	renderPlayers();
 });
 
@@ -651,10 +686,12 @@ startBtn.addEventListener("click", async () => {
 		const reactionFrequency = reactionFrequencySelect?.value || "sometimes";
 		const selectedLocation = locationSelect.value;
 		
-		// Encode players as "type:mode" pairs (human has no mode)
-		const playersParam = players.map(p =>
-			p.type === "human" ? "human" : `${p.type}:${p.mode}`
-		).join(",");
+		// Encode players as "type:mode:personality" strings (human has no mode/personality)
+		const playersParam = players.map(p => {
+			if (p.type === "human") return "human";
+			const personality = p.personality && p.personality !== "neutral" ? `:${p.personality}` : "";
+			return `${p.type}:${p.mode}${personality}`;
+		}).join(",");
 
 		const params = {
 			rounds: rounds.toString(),
