@@ -41,7 +41,7 @@ export type EarlyEndResult = {
 /** Configuration for a single player slot */
 export type PlayerSlotConfig = 
     | { type: "human" }
-    | { type: ProviderType; mode: AgentMode };
+    | { type: ProviderType; mode: AgentMode; personality?: string };
 
 export type GameConfig = {
     rounds: number; // number of Q/A turns (not "full cycles")

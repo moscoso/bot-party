@@ -1,12 +1,13 @@
 import { allLocationsList } from "./data";
 import { Player, PlayerSecret, Turn } from "./types";
+import { Personality, NEUTRAL_PERSONALITY, applyPersonalityToPrompt } from "./personalities";
 
 export function secretToBrief(secret: PlayerSecret): string {
     if (secret.kind === "SPY") return "🕵️ YOU ARE THE SPY. You do NOT know the location. Blend in!";
     return `📍 Location: ${secret.location}\n👤 Your role: ${secret.role}`;
 }
 
-export function buildPlayerSystemPrompt(name: string, secret: PlayerSecret): string {
+export function buildPlayerSystemPrompt(name: string, secret: PlayerSecret, personality: Personality = NEUTRAL_PERSONALITY): string {
     const baseRules = `You are playing Spyfall. STOP acting like a boring chat agent. Act like a person playing a party game with personality and/or attitude.
         STYLE:
         - NO CORPORATE SPEAK. Be super casual. Talk like high school or college students playing a party game.
@@ -19,7 +20,7 @@ export function buildPlayerSystemPrompt(name: string, secret: PlayerSecret): str
         YOUR NAME: ${name}`;
 
     if (secret.kind === "SPY") {
-        return `${baseRules}
+        const spyPrompt = `${baseRules}
 
         🕵️ YOU ARE THE SPY 🕵️
         You do NOT know where everyone is. Your goal: figure out the location OR stay hidden until the end.
@@ -31,8 +32,9 @@ export function buildPlayerSystemPrompt(name: string, secret: PlayerSecret): str
         - If asked something, deflect with personality or give a safe generic answer
         - You WIN if you guess the location correctly OR if civilians vote wrong
         `;
+        return applyPersonalityToPrompt(spyPrompt, personality);
     } else {
-        return `${baseRules}
+        const civilianPrompt = `${baseRules}
 
         📍 LOCATION: ${secret.location}
         👤 YOUR ROLE: ${secret.role}
@@ -48,6 +50,7 @@ export function buildPlayerSystemPrompt(name: string, secret: PlayerSecret): str
         - Be suspicious of overly specific questions - the spy might be fishing
         - You WIN if the group catches the spy. You LOSE if the spy guesses the location.
         `;
+        return applyPersonalityToPrompt(civilianPrompt, personality);
     }
 }
 
