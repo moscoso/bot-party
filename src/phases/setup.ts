@@ -91,10 +91,11 @@ export async function setupGame(config: GameConfig, deps: SetupDeps): Promise<Ga
             controllers.set(p.id, new HumanController(deps.rl!));
             console.log(`\n=== YOUR IDENTITY ===\n${secretToBrief(p.secret)}\n=====================\n`);
         } else {
-            const aiSlot = slot as { type: ProviderType; mode: "memory" | "stateful" };
+            const aiSlot = slot as { type: ProviderType; mode: "memory" | "stateful"; personality?: string };
+            const personality = getPersonalityById(aiSlot.personality || "neutral");
             const agent = new Agent({
                 name: p.name,
-                systemPrompt: buildPlayerSystemPrompt(p.name, p.secret),
+                systemPrompt: buildPlayerSystemPrompt(p.name, p.secret, personality),
                 provider: aiSlot.type,
                 mode: aiSlot.mode,
                 onPrompt: deps.onPrompt,

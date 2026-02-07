@@ -145,6 +145,17 @@ h1 {
 	cursor: not-allowed;
 }
 
+.player-slot .personality-select {
+	width: 110px;
+	font-size: 0.75rem;
+	padding: 0.35rem 0.4rem;
+}
+
+.player-slot .personality-select:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
 .player-slot .remove-btn {
 	background: transparent;
 	border: none;

@@ -103,7 +103,7 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
     
     const rounds = Math.min(30, Math.max(1, parseInt(params.get("rounds") || "9") || 9));
     
-    // Parse players param: "openai:memory,anthropic:memory,human,google:stateful"
+    // Parse players param: "openai:memory:aggressive,anthropic:memory:quiet,human,google:stateful:analytical"
     const playersParam = params.get("players");
     let playerSlots: PlayerSlotConfig[] | undefined;
     
@@ -114,13 +114,18 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
             if (slot === "human") {
                 playerSlots.push({ type: "human" });
             } else {
-                const [provider, mode] = slot.split(":");
+                const parts = slot.split(":");
+                const provider = parts[0];
+                const mode = parts[1];
+                const personality = parts[2]; // Optional third part
+                
                 if (PROVIDER_TYPES.includes(provider as ProviderType)) {
                     // Map "thread" (legacy) to "stateful"
                     const agentMode = (mode === "stateful" || mode === "thread") ? "stateful" : "memory";
                     playerSlots.push({
                         type: provider as ProviderType,
                         mode: agentMode,
+                        personality: personality || undefined,
                     });
                 }
             }
