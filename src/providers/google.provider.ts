@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { AIProvider, ChatMessage, ProviderType } from "./types";
+import { getAPIKey, wrapProviderCall } from "./validation";
 
 dotenv.config();
 
@@ -26,7 +27,7 @@ export class GoogleProvider implements AIProvider {
     private lastInteractionId?: string;
 
     constructor(model?: string) {
-        const apiKey = process.env.GOOGLE_API_KEY || "";
+        const apiKey = getAPIKey("google");
         this.legacyClient = new GoogleGenerativeAI(apiKey);
         this.genaiClient = new GoogleGenAI({ apiKey });
         this.model = model || process.env.GOOGLE_MODEL || DEFAULT_MODEL;
@@ -39,66 +40,70 @@ export class GoogleProvider implements AIProvider {
     }
 
     async chat(messages: ChatMessage[]): Promise<string> {
-        // Extract system instruction and convert messages to Gemini format
-        const systemMessage = messages.find(m => m.role === "system");
-        const nonSystemMessages = messages.filter(m => m.role !== "system");
+        return wrapProviderCall("google", "chat completion", async () => {
+            // Extract system instruction and convert messages to Gemini format
+            const systemMessage = messages.find(m => m.role === "system");
+            const nonSystemMessages = messages.filter(m => m.role !== "system");
 
-        // Pass systemInstruction to getGenerativeModel (accepts plain string)
-        const genModel = this.legacyClient.getGenerativeModel({ 
-            model: this.model,
-            systemInstruction: systemMessage?.content,
+            // Pass systemInstruction to getGenerativeModel (accepts plain string)
+            const genModel = this.legacyClient.getGenerativeModel({ 
+                model: this.model,
+                systemInstruction: systemMessage?.content,
+            });
+
+            // Gemini uses "user" and "model" roles
+            const history = nonSystemMessages.slice(0, -1).map(m => ({
+                role: m.role === "assistant" ? "model" : "user",
+                parts: [{ text: m.content }],
+            }));
+
+            const lastMessage = nonSystemMessages[nonSystemMessages.length - 1];
+
+            const chat = genModel.startChat({
+                history: history as any,
+            });
+
+            const result = await chat.sendMessage(lastMessage?.content || "");
+            const response = await result.response;
+            
+            return response.text()?.trim() || "(no response)";
         });
-
-        // Gemini uses "user" and "model" roles
-        const history = nonSystemMessages.slice(0, -1).map(m => ({
-            role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: m.content }],
-        }));
-
-        const lastMessage = nonSystemMessages[nonSystemMessages.length - 1];
-
-        const chat = genModel.startChat({
-            history: history as any,
-        });
-
-        const result = await chat.sendMessage(lastMessage?.content || "");
-        const response = await result.response;
-        
-        return response.text()?.trim() || "(no response)";
     }
 
     async chatStateful(userContent: string): Promise<string> {
-        // Use Interactions API for stateful conversations
-        // See: https://ai.google.dev/gemini-api/docs/interactions
-        
-        const interactionParams: any = {
-            model: STATEFUL_MODEL,
-            input: userContent,
-        };
+        return wrapProviderCall("google", "stateful chat", async () => {
+            // Use Interactions API for stateful conversations
+            // See: https://ai.google.dev/gemini-api/docs/interactions
+            
+            const interactionParams: any = {
+                model: STATEFUL_MODEL,
+                input: userContent,
+            };
 
-        // Add system instruction on first call
-        if (!this.lastInteractionId && this.systemPrompt) {
-            interactionParams.system_instruction = this.systemPrompt;
-        }
-
-        // Chain to previous interaction if exists
-        if (this.lastInteractionId) {
-            interactionParams.previous_interaction_id = this.lastInteractionId;
-        }
-
-        const interaction = await this.genaiClient.interactions.create(interactionParams);
-        
-        // Store interaction ID for next turn
-        this.lastInteractionId = interaction.id;
-
-        // Find the text output from the response
-        const outputs = interaction.outputs || [];
-        for (const output of outputs) {
-            if (output.type === "text" && "text" in output) {
-                return (output.text as string)?.trim() || "(no response)";
+            // Add system instruction on first call
+            if (!this.lastInteractionId && this.systemPrompt) {
+                interactionParams.system_instruction = this.systemPrompt;
             }
-        }
-        return "(no response)";
+
+            // Chain to previous interaction if exists
+            if (this.lastInteractionId) {
+                interactionParams.previous_interaction_id = this.lastInteractionId;
+            }
+
+            const interaction = await this.genaiClient.interactions.create(interactionParams);
+            
+            // Store interaction ID for next turn
+            this.lastInteractionId = interaction.id;
+
+            // Find the text output from the response
+            const outputs = interaction.outputs || [];
+            for (const output of outputs) {
+                if (output.type === "text" && "text" in output) {
+                    return (output.text as string)?.trim() || "(no response)";
+                }
+            }
+            return "(no response)";
+        });
     }
 
     async cleanup(): Promise<void> {
