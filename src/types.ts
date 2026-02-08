@@ -1,4 +1,4 @@
-import { ProviderType, AgentMode } from "./providers";
+import { ProviderType, AgentMode } from "./agent";
 
 export type PlayerId = string;
 

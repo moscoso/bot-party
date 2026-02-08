@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import dotenv from "dotenv";
-import { AIProvider, ChatMessage, ProviderType } from "./types";
+import { ChatMessage } from "../agent";
+import { AIProvider, ProviderType } from "./types";
 import { getAPIKey, wrapProviderCall } from "./validation";
 
 dotenv.config();
@@ -11,10 +12,10 @@ export class OpenAIProvider implements AIProvider {
     readonly type: ProviderType = "openai";
     readonly displayName = "GPT";
     readonly supportsStateful = true;
-    
+
     private client: OpenAI;
     private model: string;
-    
+
     // Stateful mode state (Assistants API)
     private assistantId?: string;
     private threadId?: string;
@@ -77,13 +78,13 @@ export class OpenAIProvider implements AIProvider {
             }
 
             // Get the latest assistant message
-            const messages = await this.client.beta.threads.messages.list(this.threadId!, { 
-                limit: 1, 
-                order: "desc" 
+            const messages = await this.client.beta.threads.messages.list(this.threadId!, {
+                limit: 1,
+                order: "desc"
             });
             const lastMsg = messages.data[0];
             const textBlock = lastMsg?.content?.find((c) => c.type === "text");
-        
+
             return (textBlock?.type === "text" ? textBlock.text?.value?.trim() : null) || "(no response)";
         });
     }

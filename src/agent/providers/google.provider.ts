@@ -1,7 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
-import { AIProvider, ChatMessage, ProviderType } from "./types";
+import { ChatMessage } from "../agent";
+import { AIProvider, ProviderType } from "./types";
 import { getAPIKey, wrapProviderCall } from "./validation";
 
 dotenv.config();
@@ -13,16 +14,16 @@ export class GoogleProvider implements AIProvider {
     readonly type: ProviderType = "google";
     readonly displayName = "Gemini";
     readonly supportsStateful = true;
-    
+
     // Legacy client for memory mode (Chat Completions style)
     private legacyClient: GoogleGenerativeAI;
-    
+
     // New client for stateful mode (Interactions API)
     private genaiClient: GoogleGenAI;
-    
+
     private model: string;
     private systemPrompt?: string;
-    
+
     // Stateful mode state
     private lastInteractionId?: string;
 
@@ -46,7 +47,7 @@ export class GoogleProvider implements AIProvider {
             const nonSystemMessages = messages.filter(m => m.role !== "system");
 
             // Pass systemInstruction to getGenerativeModel (accepts plain string)
-            const genModel = this.legacyClient.getGenerativeModel({ 
+            const genModel = this.legacyClient.getGenerativeModel({
                 model: this.model,
                 systemInstruction: systemMessage?.content,
             });
@@ -65,7 +66,7 @@ export class GoogleProvider implements AIProvider {
 
             const result = await chat.sendMessage(lastMessage?.content || "");
             const response = await result.response;
-            
+
             return response.text()?.trim() || "(no response)";
         });
     }
@@ -74,7 +75,7 @@ export class GoogleProvider implements AIProvider {
         return wrapProviderCall("google", "stateful chat", async () => {
             // Use Interactions API for stateful conversations
             // See: https://ai.google.dev/gemini-api/docs/interactions
-            
+
             const interactionParams: any = {
                 model: STATEFUL_MODEL,
                 input: userContent,
@@ -91,7 +92,7 @@ export class GoogleProvider implements AIProvider {
             }
 
             const interaction = await this.genaiClient.interactions.create(interactionParams);
-            
+
             // Store interaction ID for next turn
             this.lastInteractionId = interaction.id;
 

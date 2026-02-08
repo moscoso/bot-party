@@ -1,4 +1,4 @@
-import type { AIProvider, ChatMessage, ProviderType } from "../../providers/types";
+import type { AIProvider, ChatMessage, ProviderType } from "../../agent";
 
 export class MockAIProvider implements AIProvider {
     readonly type: ProviderType;

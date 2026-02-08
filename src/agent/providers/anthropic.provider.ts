@@ -1,7 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import dotenv from "dotenv";
-import { AIProvider, ChatMessage, ProviderType } from "./types";
+import { ChatMessage } from "../agent";
+import { AIProvider, ProviderType } from "./types";
 import { getAPIKey, wrapProviderCall } from "./validation";
+
 
 dotenv.config();
 
@@ -11,7 +13,7 @@ export class AnthropicProvider implements AIProvider {
     readonly type: ProviderType = "anthropic";
     readonly displayName = "Claude";
     readonly supportsStateful = false;
-    
+
     private client: Anthropic;
     private model: string;
 

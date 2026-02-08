@@ -3,7 +3,7 @@ import { Agent } from "../agent";
 import { AIController, HumanController, PlayerController } from "../controllers";
 import { GameConfig, Player, PlayerId, PlayerSecret, PlayerSlotConfig } from "../types";
 import { buildPlayerSystemPrompt, secretToBrief } from "../prompts";
-import { DEFAULT_PROVIDER_ROTATION, getProviderDisplayName, type ProviderType } from "../providers";
+import { PROVIDERS, getProviderDisplayName, type ProviderType } from "../agent";
 import { pickRandom, shuffle } from "../utils/random";
 import { getPersonalityById } from "../personalities";
 import type { GameSetup, SetupDeps } from "./types";
@@ -12,7 +12,7 @@ export function legacyConfigToSlots(config: GameConfig): PlayerSlotConfig[] {
     const numPlayers = config.numPlayers ?? 3;
     const includeHuman = config.includeHuman ?? false;
     const agentMode = config.agentMode ?? "memory";
-    const providers = config.providers ?? DEFAULT_PROVIDER_ROTATION;
+    const providers = config.providers ?? PROVIDERS;
 
     const slots: PlayerSlotConfig[] = [];
     let aiIndex = 0;

@@ -51,7 +51,7 @@ export class ProviderAPIError extends Error {
 export function validateAPIKey(provider: ProviderType): void {
     const envVar = API_KEY_ENV_VARS[provider];
     const apiKey = process.env[envVar];
-    
+
     if (!apiKey || apiKey.trim() === "") {
         throw new APIKeyError(provider, envVar, SETUP_DOCS[provider]);
     }
@@ -75,7 +75,7 @@ export function getAvailableProviders(): ProviderType[] {
     return providers.filter(hasAPIKey);
 }
 
-/** 
+/**
  * Wrap an async provider operation with better error handling.
  * Converts SDK errors into more user-friendly ProviderAPIError.
  */

@@ -135,7 +135,7 @@ function renderPlayers() {
 			opt.value = pt.value;
 			// Mark unconfigured providers
 			if (pt.value !== 'human' && !isProviderConfigured(pt.value)) {
-				opt.textContent = pt.label + ' (No API Key)';
+				opt.textContent = pt.label + ' ⚠️(No API Key)';
 				opt.disabled = true;
 				opt.style.color = '#666';
 			} else {

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { PromptEntry, AgentCreatedEntry } from "./agent";
 import { SpyfallGame, type GameInfoEntry } from "./game";
 import type { GameConfig, PlayerSlotConfig } from "./types";
-import { PROVIDER_TYPES, type ProviderType, getProviderCapabilities, getAvailableProviders, hasAPIKey } from "./providers";
+import { PROVIDERS, type ProviderType, getProviderCapabilities, getAvailableProviders, hasAPIKey } from "./agent";
 import { AnalyticsService } from "./analytics";
 import { LocationManager } from "./locations";
 
@@ -119,7 +119,7 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
                 const mode = parts[1];
                 const personality = parts[2]; // Optional third part
                 
-                if (PROVIDER_TYPES.includes(provider as ProviderType)) {
+                if (PROVIDERS.includes(provider as ProviderType)) {
                     // Map "thread" (legacy) to "stateful"
                     const agentMode = (mode === "stateful" || mode === "thread") ? "stateful" : "memory";
                     playerSlots.push({
@@ -232,7 +232,7 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
         const available = getAvailableProviders();
         const providerStatus: Record<string, { configured: boolean; displayName: string }> = {};
         
-        for (const provider of PROVIDER_TYPES) {
+        for (const provider of PROVIDERS) {
             const caps = getProviderCapabilities();
             providerStatus[provider] = {
                 configured: hasAPIKey(provider),

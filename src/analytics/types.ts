@@ -1,5 +1,5 @@
 import type { GameConfig, Turn, PlayerId } from "../types";
-import type { ProviderType } from "../providers/types";
+import type { ProviderType } from "../agent";
 
 export interface PlayerRecord {
     id: string;

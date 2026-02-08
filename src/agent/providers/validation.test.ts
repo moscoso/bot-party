@@ -28,7 +28,7 @@ describe("API Key Validation", () => {
     describe("APIKeyError", () => {
         it("should create error with correct properties", () => {
             const error = new APIKeyError("openai", "OPENAI_API_KEY", "https://example.com");
-            
+
             expect(error.name).toBe("APIKeyError");
             expect(error.provider).toBe("openai");
             expect(error.envVar).toBe("OPENAI_API_KEY");
@@ -46,7 +46,7 @@ describe("API Key Validation", () => {
 
         it("should have informative error message for each provider", () => {
             const providers: ProviderType[] = ["openai", "anthropic", "google"];
-            
+
             providers.forEach(provider => {
                 const error = new APIKeyError(provider, `${provider.toUpperCase()}_API_KEY`, "https://example.com");
                 expect(error.message).toContain("Missing API key");
@@ -60,7 +60,7 @@ describe("API Key Validation", () => {
         it("should wrap original error", () => {
             const originalError = new Error("Network timeout");
             const providerError = new ProviderAPIError("openai", originalError);
-            
+
             expect(providerError.name).toBe("ProviderAPIError");
             expect(providerError.provider).toBe("openai");
             expect(providerError.originalError).toBe(originalError);
@@ -72,7 +72,7 @@ describe("API Key Validation", () => {
         it("should include context when provided", () => {
             const originalError = new Error("Rate limit exceeded");
             const providerError = new ProviderAPIError("anthropic", originalError, "chat completion");
-            
+
             expect(providerError.context).toBe("chat completion");
             expect(providerError.message).toContain("chat completion");
             expect(providerError.message).toContain("Rate limit exceeded");
@@ -81,7 +81,7 @@ describe("API Key Validation", () => {
         it("should work without context", () => {
             const originalError = new Error("Auth failed");
             const providerError = new ProviderAPIError("google", originalError);
-            
+
             expect(providerError.context).toBeUndefined();
             expect(providerError.message).toContain("google");
             expect(providerError.message).toContain("Auth failed");
@@ -96,9 +96,9 @@ describe("API Key Validation", () => {
 
         it("should throw APIKeyError when key is missing", () => {
             delete process.env.ANTHROPIC_API_KEY;
-            
+
             expect(() => validateAPIKey("anthropic")).toThrow(APIKeyError);
-            
+
             try {
                 validateAPIKey("anthropic");
             } catch (error) {
@@ -122,7 +122,7 @@ describe("API Key Validation", () => {
 
         it("should work for all provider types", () => {
             const providers: ProviderType[] = ["openai", "anthropic", "google"];
-            
+
             providers.forEach(provider => {
                 delete (process.env as any)[`${provider.toUpperCase()}_API_KEY`];
                 expect(() => validateAPIKey(provider)).toThrow(APIKeyError);
@@ -145,7 +145,7 @@ describe("API Key Validation", () => {
             process.env.OPENAI_API_KEY = "openai-key";
             process.env.ANTHROPIC_API_KEY = "anthropic-key";
             process.env.GOOGLE_API_KEY = "google-key";
-            
+
             expect(getAPIKey("openai")).toBe("openai-key");
             expect(getAPIKey("anthropic")).toBe("anthropic-key");
             expect(getAPIKey("google")).toBe("google-key");
@@ -184,7 +184,7 @@ describe("API Key Validation", () => {
             delete process.env.OPENAI_API_KEY;
             delete process.env.ANTHROPIC_API_KEY;
             delete process.env.GOOGLE_API_KEY;
-            
+
             expect(getAvailableProviders()).toEqual([]);
         });
 
@@ -192,7 +192,7 @@ describe("API Key Validation", () => {
             process.env.OPENAI_API_KEY = "key1";
             process.env.ANTHROPIC_API_KEY = "key2";
             delete process.env.GOOGLE_API_KEY;
-            
+
             const available = getAvailableProviders();
             expect(available).toContain("openai");
             expect(available).toContain("anthropic");
@@ -204,7 +204,7 @@ describe("API Key Validation", () => {
             process.env.OPENAI_API_KEY = "key1";
             process.env.ANTHROPIC_API_KEY = "key2";
             process.env.GOOGLE_API_KEY = "key3";
-            
+
             const available = getAvailableProviders();
             expect(available).toContain("openai");
             expect(available).toContain("anthropic");
@@ -216,7 +216,7 @@ describe("API Key Validation", () => {
             process.env.OPENAI_API_KEY = "valid-key";
             process.env.ANTHROPIC_API_KEY = "";
             process.env.GOOGLE_API_KEY = "   ";
-            
+
             const available = getAvailableProviders();
             expect(available).toEqual(["openai"]);
         });
@@ -233,7 +233,7 @@ describe("API Key Validation", () => {
             const objFn = async () => ({ data: "test" });
             const numFn = async () => 42;
             const arrFn = async () => [1, 2, 3];
-            
+
             expect(await wrapProviderCall("openai", "obj", objFn)).toEqual({ data: "test" });
             expect(await wrapProviderCall("openai", "num", numFn)).toBe(42);
             expect(await wrapProviderCall("openai", "arr", arrFn)).toEqual([1, 2, 3]);
@@ -243,9 +243,9 @@ describe("API Key Validation", () => {
             const fn = async () => {
                 throw new Error("Network error");
             };
-            
+
             await expect(wrapProviderCall("anthropic", "chat", fn)).rejects.toThrow(ProviderAPIError);
-            
+
             try {
                 await wrapProviderCall("anthropic", "chat", fn);
             } catch (error) {
@@ -262,9 +262,9 @@ describe("API Key Validation", () => {
             const fn = async () => {
                 throw new APIKeyError("google", "GOOGLE_API_KEY", "https://example.com");
             };
-            
+
             await expect(wrapProviderCall("google", "test", fn)).rejects.toThrow(APIKeyError);
-            
+
             try {
                 await wrapProviderCall("google", "test", fn);
             } catch (error) {
@@ -276,11 +276,11 @@ describe("API Key Validation", () => {
         it("should re-throw ProviderAPIError without double-wrapping", async () => {
             const originalError = new Error("Original");
             const providerError = new ProviderAPIError("openai", originalError, "first wrap");
-            
+
             const fn = async () => {
                 throw providerError;
             };
-            
+
             try {
                 await wrapProviderCall("openai", "second wrap", fn);
             } catch (error) {
@@ -293,12 +293,12 @@ describe("API Key Validation", () => {
 
         it("should work with different providers", async () => {
             const providers: ProviderType[] = ["openai", "anthropic", "google"];
-            
+
             for (const provider of providers) {
                 const fn = async () => {
                     throw new Error("Test error");
                 };
-                
+
                 try {
                     await wrapProviderCall(provider, "test", fn);
                 } catch (error) {
@@ -314,7 +314,7 @@ describe("API Key Validation", () => {
             const fn = async () => {
                 throw new Error("Stack test");
             };
-            
+
             try {
                 await wrapProviderCall("openai", "test", fn);
             } catch (error) {

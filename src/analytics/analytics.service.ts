@@ -12,7 +12,7 @@ import type {
     LocationStats,
 } from "./types";
 import type { GameConfig, Turn, PlayerId, Player } from "../types";
-import type { ProviderType } from "../providers/types";
+import type { ProviderType } from "../agent";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, "..", "..", "data", "games");

@@ -2,13 +2,13 @@ export * from "./types";
 export { OpenAIProvider } from "./openai.provider";
 export { AnthropicProvider } from "./anthropic.provider";
 export { GoogleProvider } from "./google.provider";
-export { 
-    validateAPIKey, 
-    getAPIKey, 
-    hasAPIKey, 
+export {
+    validateAPIKey,
+    getAPIKey,
+    hasAPIKey,
     getAvailableProviders,
     APIKeyError,
-    ProviderAPIError 
+    ProviderAPIError
 } from "./validation";
 
 import { AIProvider, ProviderConfig, ProviderType } from "./types";
@@ -32,10 +32,8 @@ export function createProvider(config: ProviderConfig): AIProvider {
 }
 
 /** Get all available provider types */
-export const PROVIDER_TYPES: ProviderType[] = ["openai", "anthropic", "google"];
+export const PROVIDERS: ProviderType[] = ["openai", "anthropic", "google"];
 
-/** Default provider rotation for multi-agent games */
-export const DEFAULT_PROVIDER_ROTATION: ProviderType[] = ["openai", "anthropic", "google"];
 
 /** Map of provider types to their display names */
 export const PROVIDER_DISPLAY_NAMES: Record<ProviderType, string> = {

@@ -1,11 +1,16 @@
-import { AIProvider, ProviderType, ChatMessage, AgentMode, createProvider } from "./providers";
+import { AIProvider, ProviderType, createProvider } from "./providers";
 
-type Msg = ChatMessage;
+/** Agent mode: how conversation history is managed */
+export type AgentMode = "memory" | "stateful";
+
+/** Standard message format used across all providers */
+export interface ChatMessage {
+    role: "system" | "user" | "assistant";
+    content: string;
+}
+
 
 export type PromptType = "ask a question" | "answer a question" | "vote" | "guess the location" | "react" | "choose action";
-
-// Re-export AgentMode from providers for convenience
-export type { AgentMode } from "./providers";
 
 export type PromptEntry = {
     /** Unique ID to correlate sent/received events */
@@ -17,7 +22,7 @@ export type PromptEntry = {
     /** Provider used (e.g., "openai", "anthropic", "google") */
     provider: ProviderType;
     /** Messages sent (in "sent") or empty (in "received"). */
-    messages: Msg[];
+    messages: ChatMessage[];
     /** Empty in "sent", populated in "received". */
     response: string;
 };
@@ -51,7 +56,7 @@ export class Agent {
     public readonly name: string;
     public readonly providerType: ProviderType;
     public readonly displayName: string;
-    
+
     private readonly mode: AgentMode;
     private readonly systemPrompt: string;
     private readonly provider: AIProvider;
@@ -59,11 +64,11 @@ export class Agent {
     private onAgentCreated?: (entry: AgentCreatedEntry) => void;
 
     // Memory mode state (client-side history)
-    private memory: Msg[] = [];
+    private memory: ChatMessage[] = [];
 
     /** Resolves when the agent is fully initialized (awaitable before using). */
     public readonly ready: Promise<void>;
-    
+
     /** Get the agent's mode (memory or stateful) */
     public get memoryMode(): AgentMode {
         return this.mode;
@@ -101,11 +106,11 @@ export class Agent {
 
     /** Emit the agent created event. Call this after the agent is ready and when you want it logged. */
     emitCreated(): void {
-        this.onAgentCreated?.({ 
-            agentName: this.name, 
+        this.onAgentCreated?.({
+            agentName: this.name,
             provider: this.providerType,
-            mode: this.mode, 
-            systemPrompt: this.systemPrompt 
+            mode: this.mode,
+            systemPrompt: this.systemPrompt
         });
     }
 
@@ -123,26 +128,26 @@ export class Agent {
         const id = nextPromptId();
 
         // Fire "sent" before API call
-        this.onPrompt?.({ 
-            id, kind: "sent", phase, 
-            agentName: this.name, 
+        this.onPrompt?.({
+            id, kind: "sent", phase,
+            agentName: this.name,
             provider: this.providerType,
-            messages: messagesSent, 
-            response: "" 
+            messages: messagesSent,
+            response: ""
         });
 
         const text = await this.provider.chat(this.memory);
         this.memory.push({ role: "assistant", content: text });
 
         // Fire "received" after response
-        this.onPrompt?.({ 
-            id, 
-            kind: "received", 
-            phase, 
-            agentName: this.name, 
+        this.onPrompt?.({
+            id,
+            kind: "received",
+            phase,
+            agentName: this.name,
             provider: this.providerType,
-            messages: [], 
-            response: text 
+            messages: [],
+            response: text
         });
         return text;
     }
@@ -152,41 +157,41 @@ export class Agent {
         const id = nextPromptId();
 
         // For inspection: only show user message (system prompt was logged on agent creation)
-        const messagesForInspect: Msg[] = [
+        const messagesForInspect: ChatMessage[] = [
             { role: "user", content: userContent },
         ];
 
         // Fire "sent" before API call
-        this.onPrompt?.({ 
-            id, kind: "sent", phase, 
-            agentName: this.name, 
+        this.onPrompt?.({
+            id, kind: "sent", phase,
+            agentName: this.name,
             provider: this.providerType,
-            messages: messagesForInspect, 
-            response: "" 
+            messages: messagesForInspect,
+            response: ""
         });
 
         try {
             const text = await this.provider.chatStateful(userContent);
 
             // Fire "received" after response
-            this.onPrompt?.({ 
-                id, kind: "received", phase, 
-                agentName: this.name, 
+            this.onPrompt?.({
+                id, kind: "received", phase,
+                agentName: this.name,
                 provider: this.providerType,
-                messages: [], 
-                response: text 
+                messages: [],
+                response: text
             });
             return text;
         } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
-            this.onPrompt?.({ 
-                id, 
-                kind: "received", 
-                phase, 
-                agentName: this.name, 
+            this.onPrompt?.({
+                id,
+                kind: "received",
+                phase,
+                agentName: this.name,
                 provider: this.providerType,
-                messages: [], 
-                response: `Error: ${errMsg}` 
+                messages: [],
+                response: `Error: ${errMsg}`
             });
             return `Error: ${errMsg}`;
         }
