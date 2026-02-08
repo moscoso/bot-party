@@ -7,7 +7,7 @@ export interface PlayerRecord {
     role: string;
     isSpy: boolean;
     provider?: ProviderType;
-    mode?: "memory" | "stateful";
+    mode?: "stateless" | "stateful";
 }
 
 export interface TurnRecord {

@@ -17,7 +17,7 @@ export interface AIProvider {
     /**
      * Initialize the provider for a conversation.
      * For stateful mode, this sets up the thread/session with the system prompt.
-     * For memory mode, this may be a no-op.
+     * For stateless mode, this may be a no-op.
      */
     init(systemPrompt: string): Promise<void>;
 

@@ -36,11 +36,11 @@ function getPlayerTypes() {
 	];
 }
 
-// Default players: one of each AI provider with memory mode and neutral personality
+// Default players: one of each AI provider with stateless mode and neutral personality
 let players = [
-	{ type: "openai", mode: "memory", personality: "neutral" },
-	{ type: "anthropic", mode: "memory", personality: "neutral" },
-	{ type: "google", mode: "memory", personality: "neutral" },
+	{ type: "openai", mode: "stateless", personality: "neutral" },
+	{ type: "anthropic", mode: "stateless", personality: "neutral" },
+	{ type: "google", mode: "stateless", personality: "neutral" },
 ];
 
 // Available personalities
@@ -153,9 +153,9 @@ function renderPlayers() {
 				return;
 			}
 			players[index].type = newType;
-			// Reset mode to memory if switching to a type that doesn't support stateful
+			// Reset mode to stateless if switching to a type that doesn't support stateful
 			if (!supportsStateful(newType)) {
-				players[index].mode = "memory";
+				players[index].mode = "stateless";
 			}
 			// Reset personality to neutral when switching to human
 			if (newType === "human") {
@@ -172,11 +172,11 @@ function renderPlayers() {
 		const isAI = player.type !== "human";
 		const canStateful = supportsStateful(player.type);
 
-		const memoryOpt = document.createElement("option");
-		memoryOpt.value = "memory";
-		memoryOpt.textContent = "Memory";
-		if (player.mode === "memory") memoryOpt.selected = true;
-		modeSelect.appendChild(memoryOpt);
+		const statelessOpt = document.createElement("option");
+		statelessOpt.value = "stateless";
+		statelessOpt.textContent = "Stateless";
+		if (player.mode === "stateless") statelessOpt.selected = true;
+		modeSelect.appendChild(statelessOpt);
 
 		const statefulOpt = document.createElement("option");
 		statefulOpt.value = "stateful";
@@ -246,7 +246,7 @@ addPlayerBtn.addEventListener("click", () => {
 	}
 	const aiCount = players.filter(p => p.type !== "human").length;
 	const nextType = aiTypes[aiCount % aiTypes.length];
-	players.push({ type: nextType, mode: "memory", personality: "neutral" });
+	players.push({ type: nextType, mode: "stateless", personality: "neutral" });
 	renderPlayers();
 });
 

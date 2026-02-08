@@ -11,7 +11,7 @@ import type { GameSetup, SetupDeps } from "./types";
 export function legacyConfigToSlots(config: GameConfig): PlayerSlotConfig[] {
     const numPlayers = config.numPlayers ?? 3;
     const includeHuman = config.includeHuman ?? false;
-    const agentMode = config.agentMode ?? "memory";
+    const agentMode = config.agentMode ?? "stateless";
     const providers = config.providers ?? PROVIDERS;
 
     const slots: PlayerSlotConfig[] = [];
@@ -92,7 +92,7 @@ export async function setupGame(config: GameConfig, deps: SetupDeps): Promise<Ga
             controllers.set(p.id, new HumanController(deps.rl!));
             console.log(`\n=== YOUR IDENTITY ===\n${secretToBrief(p.secret)}\n=====================\n`);
         } else {
-            const aiSlot = slot as { type: ProviderType; mode: "memory" | "stateful"; personality?: string };
+            const aiSlot = slot as { type: ProviderType; mode: "stateless" | "stateful"; personality?: string };
             const personality = getPersonalityById(aiSlot.personality || "neutral");
             const agent = new Agent({
                 name: p.name,

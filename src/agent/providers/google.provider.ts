@@ -15,7 +15,7 @@ export class GoogleProvider implements AIProvider {
     readonly displayName = "Gemini";
     readonly supportsStateful = true;
 
-    // Legacy client for memory mode (Chat Completions style)
+    // Legacy client for stateless mode (Chat Completions style)
     private legacyClient: GoogleGenerativeAI;
 
     // New client for stateful mode (Interactions API)

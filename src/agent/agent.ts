@@ -1,14 +1,13 @@
 import { AIProvider, ProviderType, createProvider } from "./providers";
 
-/** Agent mode: how conversation history is managed */
-export type AgentMode = "memory" | "stateful";
+/** Agent mode: how conversation history is managed when prompting */
+export type AgentMode = "stateless" | "stateful";
 
 /** Standard message format used across all providers */
 export interface ChatMessage {
     role: "system" | "user" | "assistant";
     content: string;
 }
-
 
 export type PromptType = "ask a question" | "answer a question" | "vote" | "guess the location" | "react" | "choose action";
 
@@ -41,7 +40,7 @@ export type AgentOptions = {
     provider?: ProviderType;
     /** Optional model override for the provider */
     model?: string;
-    /** "memory" = client-side history; "stateful" = server-side history. Default: "memory". */
+    /** "stateless" = client-side history; "stateful" = server-side history. Default: "stateless". */
     mode?: AgentMode;
     onPrompt?: (entry: PromptEntry) => void;
     onAgentCreated?: (entry: AgentCreatedEntry) => void;
@@ -63,13 +62,13 @@ export class Agent {
     private onPrompt?: (entry: PromptEntry) => void;
     private onAgentCreated?: (entry: AgentCreatedEntry) => void;
 
-    // Memory mode state (client-side history)
+    // Stateless mode state (client-side history)
     private memory: ChatMessage[] = [];
 
     /** Resolves when the agent is fully initialized (awaitable before using). */
     public readonly ready: Promise<void>;
 
-    /** Get the agent's mode (memory or stateful) */
+    /** Get the agent's mode (stateless or stateful) */
     public get memoryMode(): AgentMode {
         return this.mode;
     }
@@ -85,17 +84,17 @@ export class Agent {
         this.provider = createProvider({ type: this.providerType, model: opts.model });
         this.displayName = this.provider.displayName;
 
-        // Determine mode - fall back to memory if provider doesn't support stateful
-        const requestedMode = opts.mode ?? "memory";
+        // Determine mode - fall back to stateless if provider doesn't support stateful
+        const requestedMode = opts.mode ?? "stateless";
         if (requestedMode === "stateful" && !this.provider.supportsStateful) {
-            console.warn(`Stateful mode not supported by ${this.providerType}. Falling back to memory mode.`);
-            this.mode = "memory";
+            console.warn(`Stateful mode not supported by ${this.providerType}. Falling back to stateless mode.`);
+            this.mode = "stateless";
         } else {
             this.mode = requestedMode;
         }
 
         // Initialize based on mode
-        if (this.mode === "memory") {
+        if (this.mode === "stateless") {
             this.memory.push({ role: "system", content: this.systemPrompt });
             this.ready = Promise.resolve();
         } else {
@@ -115,14 +114,14 @@ export class Agent {
     }
 
     async say(userContent: string, phase: PromptType = "ask a question"): Promise<string> {
-        if (this.mode === "memory") {
-            return this.sayWithMemory(userContent, phase);
+        if (this.mode === "stateless") {
+            return this.sayStateless(userContent, phase);
         } else {
             return this.sayStateful(userContent, phase);
         }
     }
 
-    private async sayWithMemory(userContent: string, phase: PromptType): Promise<string> {
+    private async sayStateless(userContent: string, phase: PromptType): Promise<string> {
         this.memory.push({ role: "user", content: userContent });
         const messagesSent = [...this.memory];
         const id = nextPromptId();

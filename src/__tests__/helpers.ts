@@ -15,7 +15,7 @@ export function createTestPlayerSlots(count: number): PlayerSlotConfig[] {
     for (let i = 0; i < count; i++) {
         slots.push({
             type: "openai",
-            mode: "memory",
+            mode: "stateless",
         });
     }
     return slots;

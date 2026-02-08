@@ -112,7 +112,7 @@ export class AnalyticsService {
     /**
      * Update player info (provider/mode)
      */
-    updatePlayerInfo(playerId: PlayerId, provider: ProviderType, mode: "memory" | "stateful"): void {
+    updatePlayerInfo(playerId: PlayerId, provider: ProviderType, mode: "stateless" | "stateful"): void {
         if (!this.currentGame) return;
 
         const player = this.currentGame.players?.find(p => p.id === playerId);
