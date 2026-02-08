@@ -10,6 +10,9 @@ export default defineConfig({
             reporter: ["text", "json", "html"],
             exclude: [
                 "node_modules/",
+                "dist/**",
+                "public/**",
+                "vitest.config.ts",
                 "src/**/*.{test,spec}.{ts,tsx}",
                 "**/__tests__/**",
                 "**/__mocks__/**",
